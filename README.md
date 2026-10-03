@@ -1,3 +1,11 @@
+## Kozen POS 适配版
+
+这个 fork 在 SpoolPainter v2.4.1 基础上增加原生库存管理、Kozen POS NFC 与内置小票打印，保留上游标签读写功能和金色主题。
+
+库存首页支持厂商、耗材和线卷的新增、编辑、删除、归档、称量、消耗记录及 UID 绑定。打印前重新读取耗材，支持本地二维码和可保存的纸尾长度。POS 读卡使用厂家 PICC/MIFARE 配对生命周期；没有将厂家 SDK 二进制放入仓库或 APK。
+
+请先阅读 [POS 使用与验证说明](docs/kozen-pos.md)。设备上的 USB 调试测试水印由厂商 SystemUI 生成，应用不会修改厂商 NVRAM、安全状态或认证标志。
+
 # SpoolPainter
 
 
