@@ -73,11 +73,11 @@ fun MaterialPicker(
             modifier = if (isOther) Modifier.width(120.dp) else Modifier.fillMaxWidth(),
         ) {
             OutlinedTextField(
-                value = displayValue,
+                value = if (isOther) "其他" else displayValue,
                 onValueChange = {},
                 readOnly = true,
                 enabled = enabled,
-                label = { Text("Material") },
+                label = { Text("材料") },
                 trailingIcon = if (enabled) {
                     { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) }
                 } else null,
@@ -108,7 +108,7 @@ fun MaterialPicker(
                     itemKey = { it.name },
                     itemContent = { material -> Text(material.name) },
                     pinnedContent = {
-                        PinnedOtherAction(label = other.name) {
+                        PinnedOtherAction(label = "其他") {
                             expanded = false
                             onSelect(other)
                         }
@@ -126,7 +126,7 @@ fun MaterialPicker(
                         .uppercase()
                     onCustomNameChange(sanitized)
                 },
-                label = { Text("Custom") },
+                label = { Text("自定义") },
                 singleLine = true,
                 enabled = enabled,
                 modifier = Modifier.fillMaxWidth(),

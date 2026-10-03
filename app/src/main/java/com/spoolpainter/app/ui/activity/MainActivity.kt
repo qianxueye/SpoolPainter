@@ -9,6 +9,30 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Inventory2
+import androidx.compose.material.icons.outlined.Nfc
+import androidx.compose.material.icons.outlined.Print
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.padding
+import androidx.core.app.ActivityCompat
+import android.content.pm.PackageManager
+import com.google.gson.Gson
+import com.spoolpainter.app.data.remote.inventory.InventoryRepository
+import com.spoolpainter.app.domain.models.SpoolmanSpool
+import com.spoolpainter.app.domain.primitives.NfcIntent
+import com.spoolpainter.app.domain.primitives.NfcResult
+import com.spoolpainter.app.ui.screens.inventory.InventoryScreen
+import com.spoolpainter.app.ui.screens.printing.PrintingScreen
+import com.spoolpainter.app.hardware.printer.*
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -37,6 +61,7 @@ class MainActivity : ComponentActivity() {
     @Inject lateinit var nfcRepository: NfcRepository
     @Inject lateinit var settingsRepository: SettingsRepository
     @Inject lateinit var spoolmanRepository: SpoolmanRepository
+    @Inject lateinit var inventoryRepository: InventoryRepository
     @Inject lateinit var whatsNewController: WhatsNewController
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -44,16 +69,92 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         evaluateWhatsNew()
+        requestPosPermissions()
         setContent {
             val settings by settingsRepository.settings.collectAsStateWithLifecycle()
             val darkTheme = settings.themeOverride == ThemeOverride.Dark
             SpoolPainterTheme(darkTheme = darkTheme, dynamicColor = true) {
-                var showSettings by rememberSaveable { mutableStateOf(false) }
-                if (showSettings) {
-                    BackHandler { showSettings = false }
-                    SettingsScreen(onBack = { showSettings = false })
-                } else {
-                    MainScreen(onNavigateToSettings = { showSettings = true })
+                var page by rememberSaveable { mutableStateOf("inventory") }
+                var previousPage by rememberSaveable { mutableStateOf("inventory") }
+                var printRequest by remember { mutableStateOf<PrintRequest?>(null) }
+                var scannedUid by rememberSaveable { mutableStateOf<String?>(null) }
+                var scannedUidEvent by rememberSaveable { mutableStateOf(0L) }
+                val nfcState by nfcRepository.state.collectAsStateWithLifecycle()
+                LaunchedEffect(nfcState) {
+                    if (page == "inventory" && nfcState is NfcResult.Success) {
+                        scannedUid = (nfcState as NfcResult.Success).uid.hex
+                        scannedUidEvent += 1
+                    }
+                }
+                fun openSettings() { previousPage = page; page = "settings" }
+                fun navigate(target: String) {
+                    lifecycleScope.launch { nfcRepository.disarm() }
+                    page = target
+                }
+                BackHandler(page == "settings" || page == "printing") {
+                    navigate(if (page == "settings") previousPage else "inventory")
+                }
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background,
+                    contentColor = MaterialTheme.colorScheme.onBackground,
+                ) {
+                Column(Modifier.fillMaxSize().statusBarsPadding()) {
+                    Box(Modifier.weight(1f)) {
+                        when (page) {
+                            "settings" -> SettingsScreen(onBack = { navigate(previousPage) })
+                            "tags" -> MainScreen(onNavigateToSettings = { openSettings() })
+                            "printing" -> PrintingScreen(
+                                request = printRequest,
+                                onBack = { navigate("inventory") },
+                                onSelectSpool = { navigate("inventory") },
+                            )
+                            else -> Column(Modifier.fillMaxSize()) {
+                                when (val current = nfcState) {
+                                    NfcResult.Reading -> RowScanStatus("正在扫描耗材标签…", onStop = { lifecycleScope.launch { nfcRepository.disarm() } })
+                                    is NfcResult.Error -> Text("读卡失败：${current.reason}", Modifier.padding(12.dp))
+                                    else -> Unit
+                                }
+                                InventoryScreen(
+                                    onSettings = { openSettings() },
+                                    scannedUid = scannedUid,
+                                    scannedUidEvent = scannedUidEvent,
+                                    onScanUid = { lifecycleScope.launch { nfcRepository.arm(NfcIntent.Read) } },
+                                    onPrint = { spool, sourceUrl ->
+                                        val id = spool.id
+                                        if (id != null && id > 0) {
+                                            printRequest = PrintRequest(
+                                                SpoolLabel(id, spool.filament.vendor?.name.orEmpty(), spool.filament.material.orEmpty(), spool.filament.color_hex.orEmpty(), spool.remaining_weight?.toDouble(), spool.location.orEmpty()),
+                                                sourceUrl,
+                                            )
+                                            navigate("printing")
+                                        }
+                                    },
+                                )
+                            }
+                        }
+                    }
+                    if (page != "settings") {
+                        NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
+                            listOf("inventory" to "库存管理", "tags" to "标签读写", "printing" to "小票标签").forEach { (target, label) ->
+                                NavigationBarItem(
+                                    selected = page == target,
+                                    enabled = nfcState !is NfcResult.Writing && nfcState !is NfcResult.Verifying,
+                                    onClick = { navigate(target) },
+                                    icon = { Icon(when (target) { "inventory" -> Icons.Outlined.Inventory2; "tags" -> Icons.Outlined.Nfc; else -> Icons.Outlined.Print }, contentDescription = label) },
+                                    colors = NavigationBarItemDefaults.colors(
+                                        selectedIconColor = MaterialTheme.colorScheme.primary,
+                                        selectedTextColor = MaterialTheme.colorScheme.primary,
+                                        indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f),
+                                        unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    ),
+                                    label = { Text(label) },
+                                )
+                            }
+                        }
+                    }
+                }
                 }
                 val showWhatsNew by whatsNewController.visible.collectAsStateWithLifecycle()
                 WhatsNewSheet(
@@ -64,6 +165,14 @@ class MainActivity : ComponentActivity() {
             }
         }
         intent?.let { tryDispatchNfcIntent(it) }
+    }
+
+    private fun requestPosPermissions() {
+        val required = arrayOf("com.pos.permission.CARD_READER_PICC", "com.pos.permission.PRINTER")
+            .filter { permission -> checkSelfPermission(permission) != PackageManager.PERMISSION_GRANTED }
+        if (required.isNotEmpty() && runCatching { Class.forName("com.pos.sdk.cardreader.POICardManager") }.isSuccess) {
+            ActivityCompat.requestPermissions(this, required.toTypedArray(), 701)
+        }
     }
 
     /**
@@ -120,5 +229,13 @@ class MainActivity : ComponentActivity() {
                 tag?.let { nfcRepository.onTagDiscovered(it) }
             }
         }
+    }
+}
+
+@androidx.compose.runtime.Composable
+private fun RowScanStatus(text: String, onStop: () -> Unit) {
+    androidx.compose.foundation.layout.Row(Modifier.padding(horizontal = 12.dp)) {
+        Text(text, Modifier.weight(1f))
+        TextButton(onClick = onStop) { Text("停止扫描") }
     }
 }

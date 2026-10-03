@@ -70,11 +70,11 @@ fun BrandPicker(
             modifier = if (isOther) Modifier.width(120.dp) else Modifier.fillMaxWidth(),
         ) {
             OutlinedTextField(
-                value = displayValue,
+                value = if (isOther) "其他" else displayValue,
                 onValueChange = {},
                 readOnly = true,
                 enabled = enabled,
-                label = { Text("Brand") },
+                label = { Text("品牌") },
                 trailingIcon = if (enabled) {
                     { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) }
                 } else null,
@@ -105,7 +105,7 @@ fun BrandPicker(
                     itemKey = { it },
                     itemContent = { brand -> Text(brand) },
                     pinnedContent = {
-                        PinnedOtherAction(label = "Other") {
+                        PinnedOtherAction(label = "其他") {
                             expanded = false
                             onSelect(Brand("Other"))
                         }
@@ -121,7 +121,7 @@ fun BrandPicker(
                     val sanitized = input.take(32)
                     onCustomNameChange(sanitized)
                 },
-                label = { Text("Custom") },
+                label = { Text("自定义") },
                 singleLine = true,
                 enabled = enabled,
                 modifier = Modifier.fillMaxWidth(),

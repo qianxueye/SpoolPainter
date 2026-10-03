@@ -104,12 +104,12 @@ fun MoreDetailsExpander(
             ) {
                 Icon(
                     imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                    contentDescription = if (expanded) "Collapse filament metadata" else "Expand filament metadata",
+                    contentDescription = if (expanded) "收起耗材详情" else "展开耗材详情",
                     modifier = Modifier.size(20.dp),
                     tint = MaterialTheme.colorScheme.onSurface,
                 )
                 Text(
-                    text = "Filament metadata",
+                    text = "耗材详情",
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                 )
@@ -119,7 +119,7 @@ fun MoreDetailsExpander(
                     modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    SectionLabel("Temperature")
+                    SectionLabel("温度")
                     TempRows(
                         ranges = tempRanges,
                         enabled = enabled,
@@ -129,7 +129,7 @@ fun MoreDetailsExpander(
                         val spoolmanFieldsEnabled = enabled && spoolmanReachable
                         val filamentSpecEnabled = spoolmanFieldsEnabled && !filamentSpecLocked
                         HorizontalDivider()
-                        SectionLabel("Weight")
+                        SectionLabel("重量")
                         // U13 (Cluster A) — radio-style weight picker. Visible
                         // only on the existing-spool path; the inactive
                         // method's input is hidden entirely (saves vertical
@@ -148,11 +148,11 @@ fun MoreDetailsExpander(
                             )
                         }
                         DecimalField(
-                            label = "Filament weight",
+                            label = "耗材净重",
                             supportingText = if (filamentSpecLocked && showSpoolScopeFields) {
                                 null
                             } else {
-                                "Net filament only. Excludes the empty spool."
+                                "仅耗材净重，不含空料盘。"
                             },
                             suffix = "g",
                             value = fullSpoolWeightG,
@@ -169,8 +169,8 @@ fun MoreDetailsExpander(
                         // created; back-solved via Measured if the user
                         // doesn't know the empty-spool weight directly.
                         DecimalField(
-                            label = "Empty spool",
-                            supportingText = "Spool weight without filament.",
+                            label = "空料盘重量",
+                            supportingText = "不含耗材的空料盘重量。",
                             suffix = "g",
                             value = emptySpoolWeightG,
                             enabled = spoolmanFieldsEnabled,
@@ -180,9 +180,9 @@ fun MoreDetailsExpander(
                             modifier = Modifier.fillMaxWidth(),
                         )
                         HorizontalDivider()
-                        SectionLabel("Others")
+                        SectionLabel("其他")
                         DecimalField(
-                            label = "Density",
+                            label = "密度",
                             supportingText = null,
                             suffix = "g/cm³",
                             value = densityGPerCm3,
@@ -193,7 +193,7 @@ fun MoreDetailsExpander(
                             modifier = Modifier.fillMaxWidth(),
                         )
                         DecimalField(
-                            label = "Price",
+                            label = "价格",
                             supportingText = null,
                             suffix = priceSuffix,
                             value = priceMajor,
@@ -278,7 +278,7 @@ private fun DecimalField(
         },
         enabled = enabled,
         label = { Text(label) },
-        placeholder = { Text("Optional") },
+        placeholder = { Text("可选") },
         suffix = { Text(suffix) },
         supportingText = supportingText?.let { { Text(it) } },
         singleLine = true,

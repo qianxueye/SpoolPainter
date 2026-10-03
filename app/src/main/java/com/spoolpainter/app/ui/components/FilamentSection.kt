@@ -33,7 +33,7 @@ fun FilamentSection(
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text(
-            text = "Filament",
+            text = "耗材",
             style = MaterialTheme.typography.bodyLarge,
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.primary,
@@ -45,9 +45,9 @@ fun FilamentSection(
         val hint = when {
             selectedSpoolId != null -> null
             selectedFilamentId != null ->
-                "Tap Save to create a spool for this filament."
+                "点击保存，为此耗材创建料盘。"
             else ->
-                "Select a filament, or fill in the details to create one."
+                "选择耗材，或填写信息以创建新耗材。"
         }
         hint?.let {
             Text(

@@ -72,11 +72,9 @@ open class SpoolmanRepository @Inject constructor(
                 _filaments.value = emptyList()
                 _spools.value = emptyList()
                 _connectivity.value = ConnectivityState.Unknown
-                // Auto-register extra-field schemas + populate caches on every
-                // URL bind. The user shouldn't have to tap Test Connection or
-                // Refresh just to use the app — first reachable Spoolman wins.
+                // Connecting or opening the app must remain read-only. Schema
+                // provisioning is reserved for explicit legacy write actions.
                 if (cachedApi != null) {
-                    runCatching { ensureExtraFieldsRegistered() }
                     runCatching { refresh() }
                 }
             }

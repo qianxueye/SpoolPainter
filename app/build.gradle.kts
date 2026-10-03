@@ -14,7 +14,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.spoolpainter.app"
+        applicationId = "cc.apture.spoolpainter.pos"
         minSdk = 29
         targetSdk = 36
         // 115 skipped past 114 deliberately: 114 was built for U22 as 2.3.2 but we
@@ -27,7 +27,7 @@ android {
         // reached Play. Confirm in Play Console before upload; skipping a code is
         // always safe, reusing one is not.
         versionCode = 116
-        versionName = "2.4.1"
+        versionName = "2.4.1-pos.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -77,6 +77,9 @@ android {
 }
 
 dependencies {
+    implementation("com.google.zxing:core:3.5.3")
+    implementation("com.google.code.gson:gson:2.10.1")
+    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)

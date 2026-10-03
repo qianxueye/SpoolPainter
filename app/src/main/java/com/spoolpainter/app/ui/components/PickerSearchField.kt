@@ -58,7 +58,7 @@ fun PickerSearchField(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Clear,
-                        contentDescription = "Clear search",
+                        contentDescription = "清空搜索",
                         modifier = Modifier.size(20.dp),
                         tint = MaterialTheme.colorScheme.onSurface,
                     )

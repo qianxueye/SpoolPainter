@@ -3,6 +3,9 @@ package com.spoolpainter.app.di
 import android.content.Context
 import android.nfc.NfcAdapter
 import com.spoolpainter.app.hardware.nfc.NfcAdapterWrapper
+import com.spoolpainter.app.hardware.pos.PosNfcTransport
+import com.spoolpainter.app.hardware.pos.PosNfcReader
+import com.spoolpainter.app.hardware.pos.ReflectivePosReaderSdk
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -27,6 +30,17 @@ object NfcModule {
         adapter: NfcAdapter?,
         @IoDispatcher dispatcher: CoroutineDispatcher,
     ): NfcAdapterWrapper = NfcAdapterWrapper(adapter, dispatcher)
+
+    @Provides
+    @Singleton
+    fun providePosNfcTransport(
+        @ApplicationContext context: Context,
+        @IoDispatcher dispatcher: CoroutineDispatcher,
+    ): PosNfcTransport = PosNfcReader(
+        available = { ReflectivePosReaderSdk.available(context) },
+        sdkFactory = { ReflectivePosReaderSdk(context) },
+        dispatcher = dispatcher,
+    )
 
     @Provides
     @Singleton

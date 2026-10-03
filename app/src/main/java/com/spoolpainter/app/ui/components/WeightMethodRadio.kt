@@ -71,7 +71,7 @@ fun WeightMethodRadio(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             RadioOption(
-                label = "Remaining",
+                label = "剩余重量",
                 selected = method == WeightMethod.Remaining,
                 enabled = enabled,
                 onClick = { onMethodPicked(WeightMethod.Remaining) },
@@ -79,7 +79,7 @@ fun WeightMethodRadio(
                 modifier = Modifier.weight(1f),
             )
             RadioOption(
-                label = "Measured",
+                label = "称重重量",
                 selected = method == WeightMethod.Measured,
                 enabled = enabled,
                 onClick = { onMethodPicked(WeightMethod.Measured) },
@@ -89,16 +89,16 @@ fun WeightMethodRadio(
         }
         val (label, supportingText, fieldTag) = when (method) {
             WeightMethod.Remaining -> Triple(
-                "Remaining",
+                "剩余重量",
                 if (emptySpoolWeightG != null && activeValueG != null) {
-                    "Spool on scale: ${formatGrams(activeValueG + emptySpoolWeightG)} g"
+                    "含料盘称重：${formatGrams(activeValueG + emptySpoolWeightG)} g"
                 } else null,
                 "weight-method-remaining-input",
             )
             WeightMethod.Measured -> Triple(
-                "Measured",
+                "称重重量",
                 if (emptySpoolWeightG != null && activeValueG != null) {
-                    "Filament left: ${formatGrams(max(0f, activeValueG - emptySpoolWeightG))} g"
+                    "剩余耗材：${formatGrams(max(0f, activeValueG - emptySpoolWeightG))} g"
                 } else null,
                 "weight-method-measured-input",
             )

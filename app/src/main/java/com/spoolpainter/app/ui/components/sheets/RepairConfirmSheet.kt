@@ -1,5 +1,8 @@
 package com.spoolpainter.app.ui.components.sheets
 
+import androidx.compose.ui.res.stringResource
+import com.spoolpainter.app.R
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -38,17 +41,17 @@ fun RepairConfirmSheet(
             val multi = state.otherSpoolDisplays.size >= 2
             Text(
                 text = if (multi) {
-                    "This tag is paired with multiple spools. Move it to the selected spool?"
+                    "此标签关联了多个料盘。是否改为关联所选料盘？"
                 } else {
-                    "Re-pair this tag to the selected spool?"
+                    "是否将此标签重新关联到所选料盘？"
                 },
                 style = MaterialTheme.typography.titleMedium,
             )
             Text(
                 text = if (multi) {
-                    "Currently on:\n" + state.otherSpoolDisplays.joinToString("\n") { "• $it" }
+                    "当前关联：\n" + state.otherSpoolDisplays.joinToString("\n") { "• $it" }
                 } else {
-                    "Currently on: ${state.otherSpoolDisplays.firstOrNull().orEmpty()}"
+                    "当前关联：${state.otherSpoolDisplays.firstOrNull().orEmpty()}"
                 },
                 style = MaterialTheme.typography.bodyMedium,
             )
@@ -60,13 +63,13 @@ fun RepairConfirmSheet(
                     onClick = onDismiss,
                     modifier = Modifier.testTag("repair-confirm-sheet-cancel"),
                 ) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.ui_cancel))
                 }
                 Button(
                     onClick = onConfirm,
                     modifier = Modifier.testTag("repair-confirm-sheet-confirm"),
                 ) {
-                    Text("Move it")
+                    Text("重新关联")
                 }
             }
         }

@@ -123,7 +123,7 @@ internal fun SettingsSupportSection(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text(
-                text = "Support the project",
+                text = "支持项目",
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.primary,
             )
@@ -203,7 +203,7 @@ private fun CouponCodeRow(code: String, testTag: String) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            text = "Snapmaker coupon",
+            text = "Snapmaker 优惠码",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -215,12 +215,12 @@ private fun CouponCodeRow(code: String, testTag: String) {
             modifier = Modifier.testTag(testTag),
         ) {
             Text(
-                text = if (copied) "Copied" else code,
+                text = if (copied) "已复制" else code,
                 style = MaterialTheme.typography.bodyMedium,
             )
             Icon(
                 imageVector = if (copied) Icons.Filled.Check else Icons.Filled.ContentCopy,
-                contentDescription = if (copied) "Copied" else "Copy coupon code",
+                contentDescription = if (copied) "已复制" else "复制优惠码",
                 modifier = Modifier
                     .padding(start = 6.dp)
                     .height(16.dp),

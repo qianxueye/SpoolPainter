@@ -1,5 +1,8 @@
 package com.spoolpainter.app.ui.components
 
+import androidx.compose.ui.res.stringResource
+import com.spoolpainter.app.R
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -107,8 +110,8 @@ fun ColorPicker(
             onValueChange = {},
             readOnly = true,
             enabled = enabled,
-            label = { Text("Color") },
-            placeholder = { Text("Pick a color") },
+            label = { Text("颜色") },
+            placeholder = { Text("选择颜色") },
             leadingIcon = {
                 val parsed = parseColor(current)
                 if (parsed != null) {
@@ -194,7 +197,7 @@ fun ColorPicker(
                                 tint = MaterialTheme.colorScheme.primary,
                             )
                             Text(
-                                text = "Color Wheel",
+                                text = "色轮",
                                 style = MaterialTheme.typography.bodyLarge.copy(
                                     fontWeight = FontWeight.SemiBold,
                                 ),
@@ -219,7 +222,7 @@ fun ColorPicker(
                                 tint = MaterialTheme.colorScheme.primary,
                             )
                             Text(
-                                text = "Scan color",
+                                text = "相机取色",
                                 style = MaterialTheme.typography.bodyLarge.copy(
                                     fontWeight = FontWeight.SemiBold,
                                 ),
@@ -301,7 +304,7 @@ private fun ColorWheelDialog(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Text(
-                    "Color Wheel",
+                    "色轮",
                     style = MaterialTheme.typography.titleLarge,
                 )
                 Row(
@@ -319,7 +322,7 @@ private fun ColorWheelDialog(
                             hexInput = filtered
                             if (filtered.length == 6) onPreview(filtered)
                         },
-                        label = { Text("Hex") },
+                        label = { Text("十六进制色值") },
                         prefix = { Text("#") },
                         keyboardOptions = KeyboardOptions(
                             capitalization = KeyboardCapitalization.Characters,
@@ -362,14 +365,14 @@ private fun ColorWheelDialog(
                     OutlinedButton(
                         onClick = onCancel,
                         shape = RoundedCornerShape(16.dp),
-                    ) { Text("Cancel") }
+                    ) { Text(stringResource(R.string.ui_cancel)) }
                     Button(
                         onClick = onConfirm,
                         shape = RoundedCornerShape(16.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = MaterialTheme.colorScheme.primary,
                         ),
-                    ) { Text("Done") }
+                    ) { Text(stringResource(R.string.ui_done)) }
                 }
             }
         }
@@ -464,7 +467,7 @@ private fun ColorWheel(
         }
 
         Column(verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.fillMaxWidth()) {
-            Text("Brightness", style = MaterialTheme.typography.labelLarge)
+            Text("亮度", style = MaterialTheme.typography.labelLarge)
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -499,14 +502,14 @@ private fun ColorWheel(
 }
 
 private val COMMON_COLORS = linkedMapOf(
-    "White" to "FFFFFF",
-    "Red" to "FF0000",
-    "Blue" to "0000FF",
-    "Green" to "00FF00",
-    "Yellow" to "FFFF00",
-    "Orange" to "FFA500",
-    "Pink" to "FFC0CB",
-    "Black" to "000000",
+    "白色" to "FFFFFF",
+    "红色" to "FF0000",
+    "蓝色" to "0000FF",
+    "绿色" to "00FF00",
+    "黄色" to "FFFF00",
+    "橙色" to "FFA500",
+    "粉色" to "FFC0CB",
+    "黑色" to "000000",
 )
 
 @androidx.compose.runtime.Immutable

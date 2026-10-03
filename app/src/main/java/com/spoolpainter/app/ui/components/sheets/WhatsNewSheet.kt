@@ -1,5 +1,7 @@
 package com.spoolpainter.app.ui.components.sheets
 
+import com.spoolpainter.app.ui.components.chineseUiText
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -45,11 +47,11 @@ fun WhatsNewSheet(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Text(
-                text = "What's new in SpoolPainter v2",
+                text = "SpoolPainter v2 更新内容",
                 style = MaterialTheme.typography.headlineSmall,
             )
             Text(
-                text = "Here's what changed since v1.",
+                text = "以下是相较 v1 的更新。",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -62,7 +64,7 @@ fun WhatsNewSheet(
                     .fillMaxWidth()
                     .testTag("whats-new-sheet-dismiss"),
             ) {
-                Text("Got it")
+                Text("知道了")
             }
         }
     }
@@ -86,11 +88,11 @@ private fun HighlightRow(highlight: WhatsNewHighlight) {
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             Text(
-                text = highlight.title,
+                text = highlight.title.chineseUiText(),
                 style = MaterialTheme.typography.titleMedium,
             )
             Text(
-                text = highlight.body,
+                text = highlight.body.chineseUiText(),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

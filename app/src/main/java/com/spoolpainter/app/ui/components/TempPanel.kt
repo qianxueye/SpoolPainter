@@ -51,7 +51,7 @@ fun TempPanel(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Text(
-                text = "Temperature",
+                text = "温度",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Medium,
             )
@@ -77,7 +77,7 @@ fun TempRows(
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         TempRow(
-            label = "Nozzle",
+            label = "喷嘴",
             min = ranges.extruderMin,
             max = ranges.extruderMax,
             enabled = enabled,
@@ -85,7 +85,7 @@ fun TempRows(
             onMaxChange = { onChange(ranges.copy(extruderMax = it)) },
         )
         TempRow(
-            label = "Bed",
+            label = "热床",
             min = ranges.bedMin,
             max = ranges.bedMax,
             enabled = enabled,

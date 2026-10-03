@@ -1,5 +1,9 @@
 package com.spoolpainter.app.ui.screens.main
 
+import androidx.compose.ui.res.stringResource
+import com.spoolpainter.app.R
+import com.spoolpainter.app.ui.components.chineseUiText
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.animation.core.LinearEasing
@@ -153,7 +157,7 @@ fun MainScreen(
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Text(
-                            text = data.visuals.message,
+                            text = data.visuals.message.chineseUiText(),
                             style = MaterialTheme.typography.bodyLarge,
                             modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
                         )
@@ -340,7 +344,7 @@ fun MainScreen(
                                     selectedFilamentId = state.form.selectedFilamentId,
                                 )
                             } else {
-                                "Save to Spoolman"
+                                "保存到 Spoolman"
                             },
                         )
                     }
@@ -444,7 +448,7 @@ private fun InlineReadWriteRow(
                     .testTag("main-inline-cancel"),
             ) {
                 Text(
-                    text = "Cancel",
+                    text = stringResource(R.string.ui_cancel),
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Medium,
                 )
@@ -462,15 +466,15 @@ private fun InlineReadWriteRow(
                         .testTag("main-inline-read"),
                 ) {
                     Text(
-                        text = "Read tag",
+                        text = stringResource(R.string.ui_read_tag),
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.Medium,
                     )
                 }
                 val writeLabel = when {
-                    writeMode == WriteMode.Spoolman && observedTagKind == ObservedTagKind.Vendor -> "Map tag"
-                    writeMode == WriteMode.RawNoUrl -> "Write to NFC"
-                    else -> "Write tag"
+                    writeMode == WriteMode.Spoolman && observedTagKind == ObservedTagKind.Vendor -> "关联标签"
+                    writeMode == WriteMode.RawNoUrl -> "写入 NFC"
+                    else -> "写入标签"
                 }
                 androidx.compose.material3.OutlinedButton(
                     onClick = onWrite,
@@ -497,7 +501,7 @@ private fun InlineReadWriteRow(
                 ) {
                     Spacer(modifier = Modifier.weight(1f))
                     Text(
-                        text = hint,
+                        text = hint.chineseUiText(),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,
@@ -627,10 +631,10 @@ private fun MainLogoHeader(
             modifier = Modifier
                 .align(androidx.compose.ui.Alignment.TopStart)
                 .heightIn(min = 36.dp)
-                .semantics { contentDescription = "Clear all fields" }
+                .semantics { contentDescription = "清空所有字段" }
                 .testTag("main-clear-all-button"),
         ) {
-            Text(text = "Clear", maxLines = 1)
+            Text(text = "清空", maxLines = 1)
         }
         // The MoreVert glyph stays exactly where it was, but one tap now opens
         // Settings directly instead of a popup. Maintainer's instruction: once
@@ -651,7 +655,7 @@ private fun MainLogoHeader(
         ) {
             Icon(
                 Icons.Default.MoreVert,
-                contentDescription = "Settings",
+                contentDescription = "设置",
                 tint = MaterialTheme.colorScheme.primary,
             )
         }
@@ -684,7 +688,7 @@ private fun BannerSlot(banner: BannerState) {
                     verticalArrangement = Arrangement.spacedBy(2.dp),
                 ) {
                     Text(
-                        text = "Spoolman unreachable",
+                        text = "无法连接 Spoolman",
                         style = MaterialTheme.typography.titleSmall,
                     )
                     banner.lastError?.takeIf { it.isNotBlank() }?.let { detail ->
@@ -731,7 +735,7 @@ private fun BoxScope.NfcStatusOverlay(label: String?) {
                     modifier = Modifier.size(72.dp),
                 )
                 Text(
-                    text = label ?: "",
+                    text = label?.chineseUiText() ?: "",
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Medium,
                     color = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -904,9 +908,9 @@ internal fun SpoolmanDropdown(
     }
     val selected = spools.firstOrNull { it.id == selectedId }
     val displayText = if (!enabled) {
-        "Configure Spoolman URL in Settings"
+        "请在设置中配置 Spoolman 地址"
     } else {
-        selected?.let { spoolSelectedDisplay(it) } ?: "Spools in Spoolman"
+        selected?.let { spoolSelectedDisplay(it) } ?: "Spoolman 中的料盘"
     }
 
     ExposedDropdownMenuBox(
@@ -919,7 +923,7 @@ internal fun SpoolmanDropdown(
             onValueChange = {},
             readOnly = true,
             enabled = enabled,
-            label = { Text("Spool") },
+            label = { Text("料盘") },
             trailingIcon = {
                 if (selected != null && enabled) {
                     IconButton(
@@ -934,7 +938,7 @@ internal fun SpoolmanDropdown(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Clear,
-                            contentDescription = "Clear spool selection",
+                            contentDescription = "清除料盘选择",
                             modifier = Modifier.size(24.dp),
                             tint = MaterialTheme.colorScheme.onSurface,
                         )
@@ -985,7 +989,7 @@ internal fun SpoolmanDropdown(
                     com.spoolpainter.app.ui.components.PickerSearchField(
                         query = query,
                         onQueryChange = { query = it },
-                        placeholder = "Search spools",
+                        placeholder = "搜索料盘",
                         testTag = "main-spoolman-search",
                     )
                 },
@@ -1013,7 +1017,7 @@ private data class SpoolRowDisplay(
  */
 internal fun spoolSelectedDisplay(spool: SpoolmanSpool): String {
     val filamentName = spool.filament.name?.takeIf { it.isNotBlank() }
-        ?: spool.filament.material ?: "Unknown"
+        ?: spool.filament.material ?: "未知"
     return "$filamentName · #${spool.id ?: "?"}"
 }
 
@@ -1021,7 +1025,7 @@ internal fun spoolSelectedDisplay(spool: SpoolmanSpool): String {
 internal fun spoolPrimaryRow(spool: SpoolmanSpool): String {
     val vendorName = spool.filament.vendor?.name?.takeIf { it.isNotBlank() }
     val filamentName = spool.filament.name?.takeIf { it.isNotBlank() }
-        ?: spool.filament.material ?: "Unknown"
+        ?: spool.filament.material ?: "未知"
     return if (vendorName != null) "$vendorName · $filamentName" else filamentName
 }
 
@@ -1063,7 +1067,7 @@ private fun AmbiguityBlock(state: AmbiguityState?) {
     ) {
         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(
-                text = "Multiple spools claim UID ${state.uid.hex.uppercase()}",
+                text = "多个料盘关联了 UID ${state.uid.hex.uppercase()}",
                 style = MaterialTheme.typography.titleSmall,
             )
             state.matches.forEach { spool ->
@@ -1073,7 +1077,7 @@ private fun AmbiguityBlock(state: AmbiguityState?) {
                 )
             }
             Text(
-                text = "Pick one from the dropdown to resolve, or fix the data in Spoolman.",
+                text = "请从列表中选择一个料盘，或在 Spoolman 中修正数据。",
                 style = MaterialTheme.typography.bodySmall,
             )
         }
@@ -1101,9 +1105,9 @@ private fun VendorTagHint(
 ) {
     if (!showChip || observed != ObservedTagKind.Vendor || !hasUid) return
     val body = when {
-        alreadyLinked -> "We can't read this tag's contents. Tap Save to pair it with the selected spool."
-        urlConfigured -> "We can't read this tag's contents. Pick a spool or fill the form, then tap Save to pair it."
-        else -> "We can't read this tag's contents. Configure Spoolman in Settings to pair this tag with a spool."
+        alreadyLinked -> "无法读取此标签的内容。点击保存，将其关联到所选料盘。"
+        urlConfigured -> "无法读取此标签的内容。选择料盘或填写信息，然后点击保存以关联标签。"
+        else -> "无法读取此标签的内容。请在设置中配置 Spoolman，以便将标签关联到料盘。"
     }
     Row(
         modifier = Modifier
@@ -1121,7 +1125,7 @@ private fun VendorTagHint(
         )
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(
-                text = "Vendor tag",
+                text = "厂商标签",
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.tertiary,

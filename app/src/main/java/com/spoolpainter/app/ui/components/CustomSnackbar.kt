@@ -56,7 +56,7 @@ fun CustomSnackbar(
                     )
                     
                     Text(
-                        text = message,
+                        text = message.chineseUiText(),
                         style = MaterialTheme.typography.titleMedium, // Bigger text
                         fontWeight = FontWeight.Medium,
                         color = MaterialTheme.colorScheme.inverseOnSurface
