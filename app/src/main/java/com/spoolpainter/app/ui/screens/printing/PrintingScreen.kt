@@ -121,120 +121,126 @@ fun PrintingScreen(
     val fixedPreview = remember(displayed) { runCatching { displayed?.takeIf { it.paper != null }?.let(::renderLabelBitmap) } }
     val previewError = if (selected?.paper != null) fixedPreview.exceptionOrNull() else receiptLogo.exceptionOrNull() ?: receiptPreview.exceptionOrNull()
     val previewReady = selected != null && if (selected.paper != null) fixedPreview.getOrNull() != null else receiptPreview.isSuccess && receiptLogo.isSuccess
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("打印耗材标签", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
-            TextButton(onClick = onBack) { Text("返回") }
-        }
-        OutlinedButton(onClick = onSelectSpool, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text(if (selected == null) "选择耗材" else "更换耗材") }
-        PaperTemplateSelector(
-            selection = templates, enabled = !busy,
-            onSelect = { id -> try { viewModel.selectTemplate(id); templateError = null } catch (e: Exception) { templateError = e.message } },
-            onAdd = { editingProfile = null; editorOpen = true },
-            onEdit = { editingProfile = templates.selected; editorOpen = true },
-            onDelete = { deletingProfile = templates.selected },
-        )
-        templateError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
-        if (selected == null) {
-            Text("请从库存选择一卷耗材，再预览和打印标签。")
-        } else {
-            Text("二维码内容", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(0.dp)) {
-                LabelQrMode.entries.forEach { option ->
-                    FilterChip(selected = mode == option, onClick = { mode = option }, label = { Text(option.title) }, enabled = !busy, colors = printChipColors())
-                }
+    val preparationFailure = preparation as? PrintPreparationState.Failed
+    val message = if (quarantined) (state as PrintState.Uncertain).message ?: "打印结果未知，请先查看纸张。打印已暂停，不能直接重试。"
+    else if (preparation == PrintPreparationState.Loading) "正在读取最新耗材信息…"
+    else if (preparationFailure != null) preparationFailure.message
+    else when (val current = state) {
+        PrintState.Idle -> "确认预览后，点击打印。"
+        is PrintState.Working -> "耗材 #${current.spoolId}：${current.message}"
+        is PrintState.Finished -> "耗材 #${current.spoolId} 打印完成。"
+        is PrintState.Failed -> current.message
+        is PrintState.Uncertain -> current.message ?: "耗材 #${current.spoolId} 打印结果暂时无法确认。请查看纸张；为避免重复打印，正在等待原任务结束。若一直没有响应，请确认纸张后重启应用。"
+    }
+    val isFailure = preparationFailure != null || state is PrintState.Failed || state is PrintState.Uncertain
+    Column(Modifier.fillMaxSize()) {
+        Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("打印耗材标签", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                TextButton(onClick = onBack) { Text("返回") }
             }
-            Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh), elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)) {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(if (selected.paper == null) "小票内容预览" else "标签实际排版预览", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                    if (selected.paper != null) {
-                        fixedPreview.getOrNull()?.let { bitmap ->
-                            Surface(color = Color.White, shape = RoundedCornerShape(4.dp), modifier = Modifier.fillMaxWidth()) {
-                                Image(bitmap.asImageBitmap(), contentDescription = "当前纸张模板的实际标签排版", modifier = Modifier.fillMaxWidth())
-                            }
-                        }
-                        Text("按尺寸走纸；首张标签请人工对齐。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    } else {
-                        receiptLogo.getOrNull()?.let { bitmap ->
-                            Surface(color = Color.White, modifier = Modifier.align(Alignment.CenterHorizontally)) {
-                                Image(bitmap.asImageBitmap(), contentDescription = "$receiptVendor 品牌标志",
-                                    modifier = Modifier.widthIn(max = bitmap.width.dp).fillMaxWidth().aspectRatio(bitmap.width.toFloat() / bitmap.height))
-                            }
-                        }
-                        displayed!!.textLines().forEachIndexed { index, line -> Text(line, style = if (index == 0) MaterialTheme.typography.titleSmall else MaterialTheme.typography.bodyMedium, color = if (index == 0) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant) }
-                        receiptPreview.getOrNull()?.forEach { (payload, bitmap) ->
-                            Surface(color = Color.White, shape = RoundedCornerShape(12.dp), modifier = Modifier.align(Alignment.CenterHorizontally)) {
-                                Image(bitmap, contentDescription = "二维码：$payload", modifier = Modifier.padding(10.dp).size(180.dp))
-                            }
-                            Text(payload, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                        }
-                        Text("小票预览显示打印内容，实际字距与排版由打印机决定。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            OutlinedButton(onClick = onSelectSpool, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text(if (selected == null) "选择耗材" else "更换耗材") }
+            PaperTemplateSelector(
+                selection = templates, enabled = !busy,
+                onSelect = { id -> try { viewModel.selectTemplate(id); templateError = null } catch (e: Exception) { templateError = e.message } },
+                onAdd = { editingProfile = null; editorOpen = true },
+                onEdit = { editingProfile = templates.selected; editorOpen = true },
+                onDelete = { deletingProfile = templates.selected },
+            )
+            templateError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+            if (selected == null) {
+                Text("请从库存选择一卷耗材，再预览和打印标签。")
+            } else {
+                Text("二维码内容", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(0.dp)) {
+                    LabelQrMode.entries.forEach { option ->
+                        FilterChip(selected = mode == option, onClick = { mode = option }, label = { Text(option.title) }, enabled = !busy, colors = printChipColors())
                     }
-                    previewError?.let { Text("无法准备打印内容：${it.message ?: "内容超出标签，请增大尺寸、减小字号或减少字段"}", color = MaterialTheme.colorScheme.error) }
                 }
-            }
-        }
-        if (templates.selected == null) {
-            Text("纸尾长度 · 自动保存", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                PaperTail.entries.forEach { option -> FilterChip(selected = tail == option, onClick = { viewModel.setTail(option) }, enabled = !busy, label = { Text(option.title) }, colors = printChipColors()) }
-            }
-            Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)) {
-                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Text("打印前回抽", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
-                        Switch(modifier = Modifier.semantics { contentDescription = "打印前回抽，当前设置 ${RetractionDistance(retractUnits).centimetersText} 厘米，连续小票纸实验功能" }, checked = retractBeforePrint, onCheckedChange = viewModel::setRetractBeforePrint,
-                            enabled = !busy && !quarantined && (retractBeforePrint || retractionUnavailableReason == null))
-                    }
-                    Text("实验功能，仅用于连续小票纸；标签纸不回抽。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    if (retractBeforePrint) {
-                        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            listOf(40, 80, 120, 160).forEach { units ->
-                                FilterChip(selected = retractUnits == units, onClick = { viewModel.setRetractUnits(units) }, enabled = !busy && !quarantined,
-                                    label = { Text("${RetractionDistance(units).centimetersText} cm") }, colors = printChipColors())
+                Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh), elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(if (selected.paper == null) "小票内容预览" else "标签实际排版预览", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                        if (selected.paper != null) {
+                            fixedPreview.getOrNull()?.let { bitmap ->
+                                Surface(color = Color.White, shape = RoundedCornerShape(4.dp), modifier = Modifier.fillMaxWidth()) {
+                                    Image(bitmap.asImageBitmap(), contentDescription = "当前纸张模板的实际标签排版", modifier = Modifier.fillMaxWidth())
+                                }
                             }
-                            AssistChip(onClick = { distanceDialogOpen = true }, enabled = !busy && !quarantined,
-                                label = { Text(if (retractUnits in setOf(40, 80, 120, 160)) "自定义" else "自定义 ${RetractionDistance(retractUnits).centimetersText} cm") })
+                            Text("按尺寸走纸；首张标签请人工对齐。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        } else {
+                            receiptLogo.getOrNull()?.let { bitmap ->
+                                Surface(color = Color.White, modifier = Modifier.align(Alignment.CenterHorizontally)) {
+                                    Image(bitmap.asImageBitmap(), contentDescription = "$receiptVendor 品牌标志",
+                                        modifier = Modifier.widthIn(max = bitmap.width.dp).fillMaxWidth().aspectRatio(bitmap.width.toFloat() / bitmap.height))
+                                }
+                            }
+                            displayed!!.textLines().forEachIndexed { index, line -> Text(line, style = if (index == 0) MaterialTheme.typography.titleSmall else MaterialTheme.typography.bodyMedium, color = if (index == 0) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant) }
+                            receiptPreview.getOrNull()?.forEach { (payload, bitmap) ->
+                                Surface(color = Color.White, shape = RoundedCornerShape(12.dp), modifier = Modifier.align(Alignment.CenterHorizontally)) {
+                                    Image(bitmap, contentDescription = "二维码：$payload", modifier = Modifier.padding(10.dp).size(180.dp))
+                                }
+                                Text(payload, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            }
+                            Text("小票预览显示打印内容，实际字距与排版由打印机决定。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
-                        Text("请确保连续小票纸可自由移动，纸路无阻挡。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        AssistChip(onClick = { calibrationDialogOpen = true }, enabled = !busy && !quarantined,
-                            label = { Text("回抽校准 ${RetractionCalibration(calibrationPercent).text} 倍") })
+                        previewError?.let { Text("无法准备打印内容：${it.message ?: "内容超出标签，请增大尺寸、减小字号或减少字段"}", color = MaterialTheme.colorScheme.error) }
                     }
-                    retractionUnavailableReason?.let { Text("回抽不可用：$it。可关闭回抽，按原方式打印。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                 }
             }
-        } else if (selected == null) {
-            Text("按尺寸走纸；首张标签请人工对齐。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        val preparationFailure = preparation as? PrintPreparationState.Failed
-        val message = if (quarantined) (state as PrintState.Uncertain).message ?: "打印结果未知，请先查看纸张。打印已暂停，不能直接重试。"
-        else if (preparation == PrintPreparationState.Loading) "正在读取最新耗材信息…"
-        else if (preparationFailure != null) preparationFailure.message
-        else when (val current = state) {
-            PrintState.Idle -> "确认预览后，点击打印。"
-            is PrintState.Working -> "耗材 #${current.spoolId}：${current.message}"
-            is PrintState.Finished -> "耗材 #${current.spoolId} 打印完成。"
-            is PrintState.Failed -> current.message
-            is PrintState.Uncertain -> current.message ?: "耗材 #${current.spoolId} 打印结果暂时无法确认。请查看纸张；为避免重复打印，正在等待原任务结束。若一直没有响应，请确认纸张后重启应用。"
-        }
-        val isFailure = preparationFailure != null || state is PrintState.Failed || state is PrintState.Uncertain
-        Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(
-            containerColor = if (isFailure) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
-            contentColor = if (isFailure) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSurface,
-        )) {
-            Text(message, modifier = Modifier.padding(12.dp), style = MaterialTheme.typography.bodyMedium)
-        }
-        printControlError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
-        Button(
-            onClick = {
-                selected?.let { value ->
-                    try { viewModel.print(value); printControlError = null }
-                    catch (e: Exception) { printControlError = e.message ?: "无法开始打印，请检查设置" }
+            if (templates.selected == null) {
+                Text("纸尾长度 · 自动保存", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    PaperTail.entries.forEach { option -> FilterChip(selected = tail == option, onClick = { viewModel.setTail(option) }, enabled = !busy, label = { Text(option.title) }, colors = printChipColors()) }
                 }
-            },
-            enabled = previewReady && !busy && !quarantined && retractionReady,
-            modifier = Modifier.fillMaxWidth(),
-        ) { Text(if (quarantined) "结果未知，打印已暂停" else if (preparationFailure != null) "重新读取并打印" else if (state is PrintState.Failed) "检查纸张后重新打印" else "读取最新信息并打印") }
+                Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)) {
+                    Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Text("打印前回抽", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
+                            Switch(modifier = Modifier.semantics { contentDescription = "打印前回抽，当前设置 ${RetractionDistance(retractUnits).centimetersText} 厘米，连续小票纸实验功能" }, checked = retractBeforePrint, onCheckedChange = viewModel::setRetractBeforePrint,
+                                enabled = !busy && !quarantined && (retractBeforePrint || retractionUnavailableReason == null))
+                        }
+                        Text("实验功能，仅用于连续小票纸；标签纸不回抽。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        if (retractBeforePrint) {
+                            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                listOf(40, 80, 120, 160).forEach { units ->
+                                    FilterChip(selected = retractUnits == units, onClick = { viewModel.setRetractUnits(units) }, enabled = !busy && !quarantined,
+                                        label = { Text("${RetractionDistance(units).centimetersText} cm") }, colors = printChipColors())
+                                }
+                                AssistChip(onClick = { distanceDialogOpen = true }, enabled = !busy && !quarantined,
+                                    label = { Text(if (retractUnits in setOf(40, 80, 120, 160)) "自定义" else "自定义 ${RetractionDistance(retractUnits).centimetersText} cm") })
+                            }
+                            Text("请确保连续小票纸可自由移动，纸路无阻挡。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            AssistChip(onClick = { calibrationDialogOpen = true }, enabled = !busy && !quarantined,
+                                label = { Text("回抽校准 ${RetractionCalibration(calibrationPercent).text} 倍") })
+                        }
+                        retractionUnavailableReason?.let { Text("回抽不可用：$it。可关闭回抽，按原方式打印。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    }
+                }
+            } else if (selected == null) {
+                Text("按尺寸走纸；首张标签请人工对齐。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        Surface(tonalElevation = 2.dp, shadowElevation = 3.dp, modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(
+                    containerColor = if (isFailure) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
+                    contentColor = if (isFailure) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSurface,
+                )) {
+                    Text(message, modifier = Modifier.padding(12.dp), style = MaterialTheme.typography.bodyMedium)
+                }
+                printControlError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+                Button(
+                    onClick = {
+                        selected?.let { value ->
+                            try { viewModel.print(value); printControlError = null }
+                            catch (e: Exception) { printControlError = e.message ?: "无法开始打印，请检查设置" }
+                        }
+                    },
+                    enabled = previewReady && !busy && !quarantined && retractionReady,
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text(if (quarantined) "结果未知，打印已暂停" else if (preparationFailure != null) "重新读取并打印" else if (state is PrintState.Failed) "检查纸张后重新打印" else if (busy) "正在处理打印…" else "打印耗材标签") }
+            }
+        }
     }
     if (distanceDialogOpen) RetractionDistanceDialog(
         initialUnits = retractUnits,
@@ -298,7 +304,7 @@ private fun RetractionCalibrationDialog(initialPercent: Int, onClose: () -> Unit
     var error by remember { mutableStateOf<String?>(null) }
     AlertDialog(onDismissRequest = onClose, title = { Text("回抽长度校准") }, text = {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("默认 2.00 倍，根据本机“原设置 2 cm 约退 1 cm”的反馈校正。若仍偏短可调大，偏长可调小。保存不会走纸。", style = MaterialTheme.typography.bodySmall)
+            Text("用于校准厘米设置与实际回退距离。偏短可调大，偏长可调小；保存不会走纸。", style = MaterialTheme.typography.bodySmall)
             OutlinedTextField(value = text, onValueChange = { text = it; error = null }, label = { Text("校准倍率（0.50–3.00）") },
                 singleLine = true, isError = error != null, modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
