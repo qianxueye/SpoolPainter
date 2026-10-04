@@ -2,6 +2,8 @@ package com.spoolpainter.app.di
 
 import android.content.Context
 import android.os.PowerManager
+import com.spoolpainter.app.hardware.nfc.NfcRepository
+import com.spoolpainter.app.hardware.paper.ReflectivePaperMotion
 import com.spoolpainter.app.hardware.printer.KozenPrinterPort
 import com.spoolpainter.app.hardware.printer.PrinterController
 import dagger.Module
@@ -19,13 +21,14 @@ import javax.inject.Singleton
 object PrinterModule {
     @Provides
     @Singleton
-    fun controller(@ApplicationContext context: Context): PrinterController {
+    fun controller(@ApplicationContext context: Context, nfcRepository: NfcRepository): PrinterController {
         val power = context.getSystemService(Context.POWER_SERVICE) as PowerManager
         val wakeLock = power.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "SpoolPainter:print")
         wakeLock.setReferenceCounted(false)
         return PrinterController(
             KozenPrinterPort(context),
             CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
+            paperMotion = ReflectivePaperMotion(context, withQuiescentHardware = { action -> nfcRepository.withPosHardwarePaused(action) }),
             holdAwake = { awake ->
                 // Bounded lock: a lost vendor callback must not hold the CPU indefinitely.
                 if (awake) wakeLock.acquire(120_000L) else if (wakeLock.isHeld) wakeLock.release()

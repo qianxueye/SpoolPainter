@@ -29,7 +29,14 @@ data class PrintRequest(
     val serverUrl: String,
     val qrMode: LabelQrMode = LabelQrMode.WEB,
     val paper: PaperTemplate? = null,
+    val retractBeforePrint: Boolean = false,
 ) {
+    init { validatePrintOptions() }
+
+    fun validatePrintOptions() {
+        require(!retractBeforePrint || paper == null) { "打印前回抽仅支持连续小票，不能用于定长标签" }
+    }
+
     fun webUrl(): String {
         require(label.id > 0) { "耗材编号无效" }
         val base = URI(serverUrl.trim())

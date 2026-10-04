@@ -7,6 +7,8 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="com.pos.permission.CARD_READER_PICC" />
     <uses-permission android:name="com.pos.permission.PRINTER" />
+    <uses-permission android:name="com.pos.permission.SECURITY" />
+    <uses-permission android:name="android.permission.READ_LOGS" />
     <!-- U17: camera color sampler is an optional convenience; NFC is the core. -->
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-feature

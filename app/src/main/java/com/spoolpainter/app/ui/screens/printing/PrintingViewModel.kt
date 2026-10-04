@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.spoolpainter.app.data.local.SettingsRepository
 import com.spoolpainter.app.data.remote.inventory.InventoryRepository
+import com.spoolpainter.app.hardware.paper.paperMotionUnavailableReason
 import com.spoolpainter.app.hardware.printer.PaperTemplate
 import com.spoolpainter.app.hardware.printer.PaperTail
 import com.spoolpainter.app.hardware.printer.PrintRequest
@@ -22,7 +23,13 @@ class PrintingViewModel @Inject constructor(
     inventory: InventoryRepository,
     settings: SettingsRepository,
 ) : ViewModel() {
+    private val appContext = context
     private val preferences = context.getSharedPreferences("pos_printer", Context.MODE_PRIVATE)
+    private val receiptRetractionPreference = ReceiptRetractionPreference(
+        read = { preferences.getBoolean("retract_before_print", false) },
+        write = { preferences.edit().putBoolean("retract_before_print", it).apply() },
+    )
+    val retractBeforePrint = receiptRetractionPreference.state
     private val mutableTail = MutableStateFlow(PaperTail.fromDots(preferences.getInt("tail_dots", 120)))
     val tail = mutableTail.asStateFlow()
     private val templateStore = PaperTemplateStore(
@@ -53,6 +60,8 @@ class PrintingViewModel @Inject constructor(
         preferences.edit().putInt("tail_dots", value.dots).apply()
         mutableTail.value = value
     }
+    fun setRetractBeforePrint(value: Boolean) = receiptRetractionPreference.set(value)
+    fun retractionUnavailableReason(): String? = paperMotionUnavailableReason(appContext)
     fun selectTemplate(id: String?) = templateStore.select(id)
     fun saveTemplate(id: String?, paper: PaperTemplate) = templateStore.save(id, paper)
     fun deleteTemplate(id: String) = templateStore.delete(id)
@@ -68,4 +77,15 @@ class PrintingViewModel @Inject constructor(
 /** Defensive request snapshot used before asynchronous fetching or queueing. */
 internal fun PrintRequest.capturePaperOptions(): PrintRequest = copy(
     paper = paper?.copy(selectedFields = paper.selectedFields.toSet()),
+    retractBeforePrint = paper == null && retractBeforePrint,
 )
+
+/** Only the optional receipt switch persists; paper template profiles do not contain it. */
+internal class ReceiptRetractionPreference(read: () -> Boolean, private val write: (Boolean) -> Unit) {
+    private val mutableState = MutableStateFlow(runCatching(read).getOrDefault(false))
+    val state = mutableState.asStateFlow()
+    fun set(value: Boolean) {
+        write(value)
+        mutableState.value = value
+    }
+}

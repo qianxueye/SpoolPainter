@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.FilterChip
@@ -37,6 +38,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
@@ -74,6 +77,7 @@ fun PrintingScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val pending by viewModel.pending.collectAsStateWithLifecycle()
     val tail by viewModel.tail.collectAsStateWithLifecycle()
+    val retractBeforePrint by viewModel.retractBeforePrint.collectAsStateWithLifecycle()
     val templates by viewModel.templates.collectAsStateWithLifecycle()
     val preparation by viewModel.preparation.collectAsStateWithLifecycle()
     val busy = pending > 0 || preparation == PrintPreparationState.Loading
@@ -88,7 +92,12 @@ fun PrintingScreen(
     var editingProfile by remember { mutableStateOf<PaperTemplateProfile?>(null) }
     var deletingProfile by remember { mutableStateOf<PaperTemplateProfile?>(null) }
     var templateError by remember { mutableStateOf<String?>(null) }
-    val selected = request?.copy(qrMode = mode, paper = templates.selected?.paper)
+    var printControlError by remember { mutableStateOf<String?>(null) }
+    val retractionUnavailableReason = viewModel.retractionUnavailableReason()
+    val selected = request?.copy(qrMode = mode, paper = templates.selected?.paper,
+        retractBeforePrint = templates.selected == null && retractBeforePrint)
+    val retractionReady = selected?.retractBeforePrint != true || retractionUnavailableReason == null
+    val quarantined = state is PrintState.Uncertain
     val prepared = preparation as? PrintPreparationState.Ready
     val displayed = if (prepared?.original == selected) prepared?.fresh ?: selected else selected
     val receiptPreview = remember(displayed) { runCatching { displayed?.takeIf { it.paper == null }?.qrPayloads()?.map { it to qrBitmap(it).asImageBitmap() }.orEmpty() } }
@@ -147,18 +156,31 @@ fun PrintingScreen(
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 PaperTail.entries.forEach { option -> FilterChip(selected = tail == option, onClick = { viewModel.setTail(option) }, enabled = !busy, label = { Text(option.title) }, colors = printChipColors()) }
             }
+            Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)) {
+                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text("打印前回抽 0.5 cm", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
+                        Switch(modifier = Modifier.semantics { contentDescription = "打印前回抽 0.5 厘米，连续小票纸实验功能" }, checked = retractBeforePrint, onCheckedChange = viewModel::setRetractBeforePrint,
+                            enabled = !busy && !quarantined && (retractBeforePrint || retractionUnavailableReason == null))
+                    }
+                    Text("实验功能，仅用于连续小票纸；标签纸不回抽。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (retractBeforePrint) Text("请确保连续小票纸可自由移动，纸路无阻挡。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    retractionUnavailableReason?.let { Text("回抽不可用：$it。可关闭回抽，按原方式打印。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                }
+            }
         } else if (selected == null) {
             Text("按尺寸走纸；首张标签请人工对齐。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         val preparationFailure = preparation as? PrintPreparationState.Failed
-        val message = if (preparation == PrintPreparationState.Loading) "正在读取最新耗材信息…"
+        val message = if (quarantined) (state as PrintState.Uncertain).message ?: "打印结果未知，请先查看纸张。打印已暂停，不能直接重试。"
+        else if (preparation == PrintPreparationState.Loading) "正在读取最新耗材信息…"
         else if (preparationFailure != null) preparationFailure.message
         else when (val current = state) {
             PrintState.Idle -> "确认预览后，点击打印。"
             is PrintState.Working -> "耗材 #${current.spoolId}：${current.message}"
             is PrintState.Finished -> "耗材 #${current.spoolId} 打印完成。"
             is PrintState.Failed -> current.message
-            is PrintState.Uncertain -> "耗材 #${current.spoolId} 打印结果暂时无法确认。请查看纸张；为避免重复打印，正在等待原任务结束。若一直没有响应，请确认纸张后重启应用。"
+            is PrintState.Uncertain -> current.message ?: "耗材 #${current.spoolId} 打印结果暂时无法确认。请查看纸张；为避免重复打印，正在等待原任务结束。若一直没有响应，请确认纸张后重启应用。"
         }
         val isFailure = preparationFailure != null || state is PrintState.Failed || state is PrintState.Uncertain
         Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(
@@ -167,11 +189,17 @@ fun PrintingScreen(
         )) {
             Text(message, modifier = Modifier.padding(12.dp), style = MaterialTheme.typography.bodyMedium)
         }
+        printControlError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
         Button(
-            onClick = { selected?.let(viewModel::print) },
-            enabled = previewReady && !busy,
+            onClick = {
+                selected?.let { value ->
+                    try { viewModel.print(value); printControlError = null }
+                    catch (e: Exception) { printControlError = e.message ?: "无法开始打印，请检查设置" }
+                }
+            },
+            enabled = previewReady && !busy && !quarantined && retractionReady,
             modifier = Modifier.fillMaxWidth(),
-        ) { Text(if (preparationFailure != null) "重新读取并打印" else if (state is PrintState.Failed) "检查纸张后重新打印" else "读取最新信息并打印") }
+        ) { Text(if (quarantined) "结果未知，打印已暂停" else if (preparationFailure != null) "重新读取并打印" else if (state is PrintState.Failed) "检查纸张后重新打印" else "读取最新信息并打印") }
     }
     if (editorOpen) PaperTemplateEditor(
         profile = editingProfile,

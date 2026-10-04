@@ -31,5 +31,5 @@ sealed interface PrintState {
     data class Finished(val spoolId: Int) : PrintState
     data class Failed(val message: String) : PrintState
     /** No automatic retry: a job may still be printing after the callback deadline. */
-    data class Uncertain(val spoolId: Int) : PrintState
+    data class Uncertain(val spoolId: Int, val message: String? = null) : PrintState
 }

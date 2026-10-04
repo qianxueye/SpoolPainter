@@ -4,6 +4,7 @@ import android.nfc.Tag
 import com.spoolpainter.app.hardware.pos.PosNfcTransport
 import com.spoolpainter.app.hardware.pos.PosTagSession
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -31,6 +32,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.datetime.Clock
 import javax.inject.Inject
 import javax.inject.Singleton
+import java.util.concurrent.ConcurrentHashMap
 import com.spoolpainter.app.data.local.SettingsRepository
 
 @Singleton
@@ -63,9 +65,16 @@ open class NfcRepository internal constructor(
     open val lastSeenTag: StateFlow<TagBuffer?> = _lastSeenTag.asStateFlow()
 
     private val mutex = Mutex()
+    private val posLifecycleMutex = Mutex()
+    private val posPauseMutex = Mutex()
+    @Volatile private var posDisarming = false
+    @Volatile private var posPaused = false
     @Volatile private var armedIntent: NfcIntent? = null
     @Volatile private var attached: ComponentActivity? = null
     private var posJob: Job? = null
+    // Cancelled scans can still be closing the shared POS hardware. Track them until
+    // cleanup completes so a printing transition cannot race a predecessor's close.
+    private val posJobs = ConcurrentHashMap.newKeySet<Job>()
     private var posGeneration = 0L
 
     private fun usePos(): Boolean = posTransport?.isAvailable() == true
@@ -83,6 +92,7 @@ open class NfcRepository internal constructor(
     }
 
     private fun startPosScan() {
+        if (posDisarming || posPaused) return
         posJob?.cancel()
         val generation = ++posGeneration
         posJob = scope.launch(ioDispatcher) {
@@ -104,6 +114,10 @@ open class NfcRepository internal constructor(
                     }
                 }
             }
+        }
+        posJob?.let { job ->
+            posJobs.add(job)
+            job.invokeOnCompletion { posJobs.remove(job) }
         }
     }
 
@@ -136,6 +150,7 @@ open class NfcRepository internal constructor(
     }
 
     open suspend fun arm(intent: NfcIntent) {
+        if (usePos() && (posDisarming || posPaused)) return
         if (!isAvailable()) {
             mutex.withLock {
                 armedIntent = null
@@ -144,6 +159,7 @@ open class NfcRepository internal constructor(
             return
         }
         mutex.withLock {
+            if (usePos() && (posDisarming || posPaused)) return
             armedIntent = intent
             _state.value = when (intent) {
                 is NfcIntent.Read -> NfcResult.Reading
@@ -177,13 +193,38 @@ open class NfcRepository internal constructor(
 
     open suspend fun disarm() {
         if (usePos()) {
-            ++posGeneration
-            posJob?.cancel()
-            posJob = null
+            posLifecycleMutex.withLock {
+                posDisarming = true
+                try {
+                    ++posGeneration
+                    mutex.withLock { armedIntent = null }
+                    val scans = posJobs.toList()
+                    scans.forEach { it.cancel() }
+                    posJob = null
+                    // PICC/MIFARE finally blocks perform blocking Binder cleanup. A cancelled
+                    // caller must still wait for that cleanup before allowing paper motion.
+                    withContext(NonCancellable) { scans.forEach { it.join() } }
+                    mutex.withLock { _state.value = NfcResult.Idle }
+                } finally {
+                    posDisarming = false
+                }
+            }
+            return
         }
         mutex.withLock {
             armedIntent = null
             _state.value = NfcResult.Idle
+        }
+    }
+
+    /** Keep POS reader traffic excluded until a paper operation's final cleanup is finished. */
+    suspend fun withPosHardwarePaused(action: suspend () -> Unit) = posPauseMutex.withLock {
+        posPaused = true
+        try {
+            disarm()
+            action()
+        } finally {
+            posPaused = false
         }
     }
 

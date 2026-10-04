@@ -126,4 +126,24 @@ class PrintPreparationTest {
         assertEquals(LabelQrMode.WEB, submitted.single().qrMode)
     }
 
+    @Test fun captureKeepsOptionalRetractionDuringLatestRecordFetchWithoutFollowingUiChanges() = runTest {
+        var stored = false
+        val preference = ReceiptRetractionPreference({ stored }, { stored = it })
+        preference.set(true)
+        val clicked = request.copy(retractBeforePrint = preference.state.value)
+        val captured = clicked.capturePaperOptions()
+        val fetched = CompletableDeferred<JsonObject>()
+        val submitted = mutableListOf<PrintRequest>()
+        val worker = PrintPreparation(backgroundScope, { request.serverUrl }, { fetched.await() }, { true }, { value, _ -> submitted += value; true })
+        worker.start(captured, PaperTail.ONE_AND_HALF_CM)
+        runCurrent()
+        preference.set(false)
+        fetched.complete(fixture())
+        runCurrent()
+        assertTrue(submitted.single().retractBeforePrint)
+        assertFalse(preference.state.value)
+        assertEquals("PETG Pro", submitted.single().label.name)
+        assertEquals(LabelQrMode.BOTH, submitted.single().qrMode)
+    }
+
 }

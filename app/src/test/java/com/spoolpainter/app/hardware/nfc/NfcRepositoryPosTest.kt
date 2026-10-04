@@ -9,6 +9,10 @@ import com.spoolpainter.app.hardware.pos.PosTagSession
 import com.spoolpainter.app.support.FakeSettingsRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.async
+import kotlinx.coroutines.withContext
 import io.mockk.mockk
 import androidx.activity.ComponentActivity
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -115,6 +119,92 @@ class NfcRepositoryPosTest {
         assertEquals(1, scans)
         assertEquals(1, cleaned)
         repo.detach()
+    }
+    @Test fun `disarm waits for POS hardware cleanup before returning`() = runTest {
+        assertDisarmWaitsForCleanup(detachFirst = false)
+    }
+    @Test fun `disarm also waits for cleanup of a scan already cancelled by pause`() = runTest {
+        assertDisarmWaitsForCleanup(detachFirst = true)
+    }
+    @Test fun `scan cannot rearm or resume while disarm drains POS cleanup`() = runTest {
+        assertDisarmWaitsForCleanup(detachFirst = true, rearmDuringCleanup = true)
+    }
+    @Test fun `paper hardware pause excludes reader throughout operation and releases afterwards`() = runTest {
+        var scans = 0
+        val blocking = object : PosNfcTransport {
+            override fun isAvailable() = true
+            override suspend fun runForeground(onTag: suspend (PosTagSession) -> Unit) {
+                scans++
+                awaitCancellation()
+            }
+        }
+        val dispatcher = UnconfinedTestDispatcher(testScheduler)
+        val repo = NfcRepository(FakeNfcAdapterWrapper(), this, dispatcher, MutableClock(0), FakeSettingsRepository(), null, 5000, blocking)
+        val activity = mockk<ComponentActivity>(relaxed = true)
+        repo.attach(activity)
+        val entered = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        val paper = async(dispatcher) {
+            repo.withPosHardwarePaused { entered.complete(Unit); release.await() }
+        }
+        entered.await()
+        repo.arm(NfcIntent.Read)
+        repo.detach()
+        repo.attach(activity)
+        repo.arm(NfcIntent.Read)
+        assertEquals(0, scans)
+        assertEquals(NfcResult.Idle, repo.state.value)
+        release.complete(Unit)
+        paper.await()
+        repo.arm(NfcIntent.Read)
+        assertEquals(1, scans)
+        repo.disarm()
+    }
+    @Test fun `failed paper operation releases POS reader pause without restarting a scan`() = runTest {
+        val repo = NfcRepository(FakeNfcAdapterWrapper(), this, UnconfinedTestDispatcher(testScheduler), MutableClock(0), FakeSettingsRepository(), null, 5000, transport)
+        assertTrue(runCatching { repo.withPosHardwarePaused { error("paper failure") } }.isFailure)
+        assertEquals(NfcResult.Idle, repo.state.value)
+        repo.arm(NfcIntent.Read)
+        assertEquals(NfcResult.Reading, repo.state.value)
+    }
+    private suspend fun kotlinx.coroutines.test.TestScope.assertDisarmWaitsForCleanup(detachFirst: Boolean, rearmDuringCleanup: Boolean = false) {
+        val cleanupStarted = CompletableDeferred<Unit>()
+        val allowCleanup = CompletableDeferred<Unit>()
+        var cleaned = false
+        var scans = 0
+        val blocking = object : PosNfcTransport {
+            override fun isAvailable() = true
+            override suspend fun runForeground(onTag: suspend (PosTagSession) -> Unit) {
+                scans++
+                try { awaitCancellation() }
+                finally {
+                    withContext(NonCancellable) {
+                        cleanupStarted.complete(Unit)
+                        allowCleanup.await()
+                        cleaned = true
+                    }
+                }
+            }
+        }
+        val dispatcher = UnconfinedTestDispatcher(testScheduler)
+        val repo = NfcRepository(FakeNfcAdapterWrapper(), this, dispatcher, MutableClock(0), FakeSettingsRepository(), null, 5000, blocking)
+        repo.attach(mockk<ComponentActivity>(relaxed = true))
+        repo.arm(NfcIntent.Read)
+        if (detachFirst) repo.detach()
+        val disarm = async(dispatcher) { repo.disarm() }
+        cleanupStarted.await()
+        assertFalse(disarm.isCompleted)
+        assertFalse(cleaned)
+        if (rearmDuringCleanup) {
+            repo.arm(NfcIntent.Read)
+            repo.attach(mockk<ComponentActivity>(relaxed = true))
+            assertEquals(1, scans)
+        }
+        allowCleanup.complete(Unit)
+        disarm.await()
+        assertTrue(cleaned)
+        assertEquals(NfcResult.Idle, repo.state.value)
+        assertEquals(1, scans)
     }
     private class Session(
         val classic: Boolean = false,

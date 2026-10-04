@@ -37,8 +37,13 @@ class KozenPrinterPort(private val context: Context) : PrinterPort {
 
     override fun prepare(request: PrintRequest) {
         // Complete all measured validation before touching the vendor cache or dispatching paper.
-        val fixedBitmap = request.paper?.let { renderLabelBitmap(request) }
-        fixedLabelJob = fixedBitmap != null
+        request.validatePrintOptions()
+        val fixedBitmap = when {
+            request.paper != null -> renderLabelBitmap(request)
+            request.retractBeforePrint -> renderReceiptBitmap(request)
+            else -> null
+        }
+        fixedLabelJob = request.paper != null
         managerClass.getMethod("cleanCache").invoke(manager)
         val add = managerClass.getMethod("addPrintLine", lineClass)
         if (fixedBitmap != null) {

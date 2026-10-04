@@ -88,8 +88,10 @@ class MainActivity : ComponentActivity() {
                 }
                 fun openSettings() { previousPage = page; page = "settings" }
                 fun navigate(target: String) {
-                    lifecycleScope.launch { nfcRepository.disarm() }
-                    page = target
+                    lifecycleScope.launch {
+                        nfcRepository.disarm()
+                        page = target
+                    }
                 }
                 BackHandler(page == "settings" || page == "printing") {
                     navigate(if (page == "settings") previousPage else "inventory")

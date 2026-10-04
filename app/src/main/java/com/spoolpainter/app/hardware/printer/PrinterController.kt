@@ -1,5 +1,9 @@
 package com.spoolpainter.app.hardware.printer
 
+import com.spoolpainter.app.hardware.paper.MotionUnknown
+import com.spoolpainter.app.hardware.paper.PaperMotion
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
@@ -16,6 +20,7 @@ class PrinterController(
     private val scope: CoroutineScope,
     private val callbackTimeoutMs: Long = 60_000,
     private val holdAwake: (Boolean) -> Unit = {},
+    private val paperMotion: PaperMotion = PaperMotion { error("此设备尚未配置打印前回抽") },
 ) {
     private data class Job(val request: PrintRequest, val tail: PaperTail)
     private sealed interface Completion {
@@ -35,6 +40,15 @@ class PrinterController(
         scope.launch {
             for (job in jobs) {
                 try { execute(job) }
+                catch (e: MotionUnknown) {
+                    runCatching { holdAwake(false) } // Motion/cleanup has returned; quarantine needs no CPU lease.
+                    uncertain = true
+                    mutableState.value = PrintState.Uncertain(job.request.label.id, e.message)
+                    // No terminal print callback exists for failed pre-print motion. Keep the
+                    // entire queue quarantined; no later job may rasterize or move paper.
+                    awaitCancellation()
+                }
+                catch (e: CancellationException) { throw e }
                 catch (e: Exception) { mutableState.value = PrintState.Failed(e.cause?.message ?: e.message ?: "打印失败") }
                 finally {
                     runCatching { holdAwake(false) }
@@ -53,7 +67,7 @@ class PrinterController(
         if (uncertain) return false
         // Snapshot the caller-owned set: later template edits cannot change queued work.
         val captured = request.copy(paper = request.paper?.copy(selectedFields = request.paper.selectedFields.toSet()))
-        try { captured.qrPayloads(); captured.paper?.validate() }
+        try { captured.validatePrintOptions(); captured.qrPayloads(); captured.paper?.validate() }
         catch (e: IllegalArgumentException) { mutableState.value = PrintState.Failed(e.message ?: "标签无效"); return false }
         catch (e: java.net.URISyntaxException) { mutableState.value = PrintState.Failed("服务器地址格式无效"); return false }
         mutablePending.value += 1
@@ -63,6 +77,7 @@ class PrinterController(
 
     private suspend fun execute(job: Job) {
         val id = job.request.label.id
+        paperMotion.checkNoPending()
         mutableState.value = PrintState.Working(id, "正在连接打印机…")
         holdAwake(true)
         if (!open || port.state() == 4) {
@@ -80,6 +95,10 @@ class PrinterController(
             return
         }
         port.prepare(job.request)
+        if (job.request.retractBeforePrint) {
+            mutableState.value = PrintState.Working(id, "正在回抽纸张并核验结果…")
+            paperMotion.retractBeforePrint()
+        }
         val done = CompletableDeferred<Completion>()
         val listener = object : PrinterPort.Listener {
             override fun onStart() { scope.launch {
