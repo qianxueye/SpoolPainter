@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.gson.JsonObject
 import com.spoolpainter.app.data.remote.inventory.*
+import com.spoolpainter.app.domain.primitives.SpoolQrPayload
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -43,6 +44,14 @@ class InventoryViewModel @Inject constructor(private val repository: InventoryRe
         val url = requireNotNull(_state.value.snapshot) { "请先刷新库存" }.url
         val record = repository.get(entity, id, url)
         _state.value = _state.value.copy(selectedEntity = entity, selected = record, editorOpen = false)
+    }
+    fun openQr(payload: String) = read {
+        val url = requireNotNull(_state.value.snapshot) { "请先刷新库存" }.url
+        val id = SpoolQrPayload.spoolId(payload, url)
+        val record = repository.get("spool", id, url)
+        repository.verifyServer(url)
+        check(record.recordId() == id) { "服务器返回了不同的库存编号，请刷新后重试" }
+        _state.value = _state.value.copy(selectedEntity = "spool", selected = record, editorOpen = false, message = "已打开二维码对应库存 #$id")
     }
     fun edit(entity: String, create: Boolean = false) = read {
         val url = requireNotNull(_state.value.snapshot) { "请先刷新库存" }.url

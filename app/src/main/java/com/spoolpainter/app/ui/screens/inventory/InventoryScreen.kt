@@ -8,6 +8,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Nfc
+import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -50,6 +51,7 @@ fun InventoryScreen(
     var sort by remember { mutableStateOf(0) }
     var uid by remember { mutableStateOf("") }
     var uidSearchOpen by remember { mutableStateOf(false) }
+    var qrScannerOpen by remember { mutableStateOf(false) }
     var confirm by remember { mutableStateOf<String?>(null) }
     var weightMode by remember { mutableStateOf<Boolean?>(null) }
     var advanced by remember(state.selected) { mutableStateOf(false) }
@@ -61,6 +63,9 @@ fun InventoryScreen(
     Column(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text("库存管理", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+            IconButton(onClick = { qrScannerOpen = true }, enabled = !state.busy && state.snapshot != null) {
+                Icon(Icons.Filled.QrCodeScanner, contentDescription = "扫描库存二维码", tint = MaterialTheme.colorScheme.primary)
+            }
             IconButton(onClick = { viewModel.refresh() }, enabled = !state.busy) {
                 Icon(Icons.Filled.Refresh, contentDescription = "刷新库存", tint = MaterialTheme.colorScheme.primary)
             }
@@ -186,6 +191,10 @@ fun InventoryScreen(
             }
         }
     }
+    if (qrScannerOpen) InventoryQrScanner(
+        onQr = { payload -> qrScannerOpen = false; viewModel.openQr(payload) },
+        onDismiss = { qrScannerOpen = false },
+    )
     if (state.editorOpen) InventoryEditor(state, onClose = viewModel::closeEditor, onSave = viewModel::save)
     confirm?.let { action ->
         val description = when (action) {
