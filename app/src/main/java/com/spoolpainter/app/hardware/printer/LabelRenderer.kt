@@ -53,7 +53,7 @@ fun renderLabelBitmap(request: PrintRequest): Bitmap {
 }
 
 /** Fully render compensation receipts before any motion so rendering errors cannot follow retraction. */
-fun renderReceiptBitmap(request: PrintRequest): Bitmap {
+fun renderReceiptBitmap(request: PrintRequest, brandLogo: Bitmap?): Bitmap {
     require(request.paper == null) { "此渲染器只支持连续小票" }
     request.validatePrintOptions()
     val paint = Paint().apply { color = Color.BLACK; textSize = 24f; typeface = Typeface.DEFAULT; isAntiAlias = false }
@@ -68,7 +68,7 @@ fun renderReceiptBitmap(request: PrintRequest): Bitmap {
     data class QrRow(val bitmap: Bitmap, val y: Int)
     val texts = mutableListOf<TextRow>()
     val qrs = mutableListOf<QrRow>()
-    var height = 0
+    var height = brandLogo?.height ?: 0
     fun addText(text: String, centered: Boolean) {
         wrapLabelText(text, PRINTER_WIDTH_DOTS, metrics).forEach { line ->
             texts += TextRow(line, height, centered)
@@ -88,6 +88,7 @@ fun renderReceiptBitmap(request: PrintRequest): Bitmap {
         density = Bitmap.DENSITY_NONE
         eraseColor(Color.WHITE)
         val canvas = Canvas(this)
+        brandLogo?.let { canvas.drawBitmap(it, ((PRINTER_WIDTH_DOTS - it.width) / 2).toFloat(), 0f, null) }
         texts.forEach { row ->
             val x = if (row.centered) (PRINTER_WIDTH_DOTS - paint.measureText(row.text)) / 2f else 0f
             canvas.drawText(row.text, x, row.y + metrics.baselineOffsetDots, paint)

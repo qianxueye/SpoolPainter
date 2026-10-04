@@ -38,9 +38,10 @@ class KozenPrinterPort(private val context: Context) : PrinterPort {
     override fun prepare(request: PrintRequest) {
         // Complete all measured validation before touching the vendor cache or dispatching paper.
         request.validatePrintOptions()
+        val brandLogo = if (request.paper == null) renderReceiptBrandLogo(context, request.label.vendor) else null
         val fixedBitmap = when {
             request.paper != null -> renderLabelBitmap(request)
-            request.retractBeforePrint -> renderReceiptBitmap(request)
+            request.retractBeforePrint -> renderReceiptBitmap(request, brandLogo)
             else -> null
         }
         fixedLabelJob = request.paper != null
@@ -54,6 +55,9 @@ class KozenPrinterPort(private val context: Context) : PrinterPort {
             return
         }
         val constructor = textClass.getConstructor(String::class.java, Int::class.javaPrimitiveType, Float::class.javaPrimitiveType, Boolean::class.javaPrimitiveType)
+        brandLogo?.let {
+            add.invoke(manager, bitmapClass.getConstructor(Bitmap::class.java, Int::class.javaPrimitiveType).newInstance(it, 1))
+        }
         request.textLines().forEachIndexed { index, text ->
             add.invoke(manager, constructor.newInstance(text, if (index == 0) 1 else 0, 24f, index == 0))
         }

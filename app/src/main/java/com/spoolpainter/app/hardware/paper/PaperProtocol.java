@@ -5,7 +5,8 @@ import java.util.Arrays;
 /** Closed packet vocabulary for this reviewed diagnostic; no arbitrary command constructor. */
 public final class PaperProtocol {
     private PaperProtocol() {}
-    private static final byte[] BACKWARD = {(byte) 0x45, 4, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xd8};
+    public static final int RETRACT_UNITS = -80;
+    private static final byte[] BACKWARD = {(byte) 0x45, 4, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xb0};
     private static final byte[] STATUS_PREFIX = {1, 1, (byte) 0x80, (byte) 0xff, (byte) 0xff, 1, 5, 'L', 'T', 'P', '0', '2', 2, 1};
     public static final String EXPECTED_VERSION = "SP_V1.01.007 YC02FF00 241121";
 
@@ -15,7 +16,7 @@ public final class PaperProtocol {
     public static void requireWhitelistedRequest(byte[] request) {
         require(request != null && request.length >= 7, "请求格式无效");
         int sequence = request[3] & 255;
-        require(Arrays.equals(request, statusRequest(sequence)) || Arrays.equals(request, retractRequest(sequence)), "仅允许普通状态请求与固定 -40 单位回抽");
+        require(Arrays.equals(request, statusRequest(sequence)) || Arrays.equals(request, retractRequest(sequence)), "仅允许普通状态请求与固定 -80 单位回抽");
     }
 
     private static byte[] frame(int sequence, int command, byte[] payload) {

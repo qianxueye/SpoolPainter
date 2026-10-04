@@ -193,7 +193,7 @@ class ReflectivePaperMotion(
     private fun unhex(value: String) = ByteArray(value.length / 2) { value.substring(it * 2, it * 2 + 2).toInt(16).toByte() }
 
     private fun saveAudit(op: Operation, proof: NativeLogAudit.Result?, outcome: String) {
-        val json = JSONObject().put("operation", op.id).put("fixed_units", -40).put("outcome", outcome)
+        val json = JSONObject().put("operation", op.id).put("fixed_units", PaperProtocol.RETRACT_UNITS).put("outcome", outcome)
             .put("movement_sent", op.movementSent).put("time_ms", System.currentTimeMillis())
         val rows = JSONArray()
         proof?.let { result -> json.put("native_pid", result.nativePid); result.matchedPrinterRows.forEach(rows::put) }

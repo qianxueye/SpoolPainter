@@ -15,11 +15,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Switch
@@ -38,6 +40,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -52,6 +55,7 @@ import com.spoolpainter.app.hardware.printer.PrintRequest
 import com.spoolpainter.app.hardware.printer.PrintState
 import com.spoolpainter.app.hardware.printer.qrBitmap
 import com.spoolpainter.app.hardware.printer.renderLabelBitmap
+import com.spoolpainter.app.hardware.printer.renderReceiptBrandLogo
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -100,10 +104,13 @@ fun PrintingScreen(
     val quarantined = state is PrintState.Uncertain
     val prepared = preparation as? PrintPreparationState.Ready
     val displayed = if (prepared?.original == selected) prepared?.fresh ?: selected else selected
+    val context = LocalContext.current
+    val receiptVendor = displayed?.takeIf { it.paper == null }?.label?.vendor
+    val receiptLogo = remember(context, receiptVendor) { runCatching { receiptVendor?.let { renderReceiptBrandLogo(context, it) } } }
     val receiptPreview = remember(displayed) { runCatching { displayed?.takeIf { it.paper == null }?.qrPayloads()?.map { it to qrBitmap(it).asImageBitmap() }.orEmpty() } }
     val fixedPreview = remember(displayed) { runCatching { displayed?.takeIf { it.paper != null }?.let(::renderLabelBitmap) } }
-    val previewError = if (selected?.paper != null) fixedPreview.exceptionOrNull() else receiptPreview.exceptionOrNull()
-    val previewReady = selected != null && if (selected.paper != null) fixedPreview.getOrNull() != null else receiptPreview.isSuccess
+    val previewError = if (selected?.paper != null) fixedPreview.exceptionOrNull() else receiptLogo.exceptionOrNull() ?: receiptPreview.exceptionOrNull()
+    val previewReady = selected != null && if (selected.paper != null) fixedPreview.getOrNull() != null else receiptPreview.isSuccess && receiptLogo.isSuccess
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text("打印耗材标签", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
@@ -138,6 +145,12 @@ fun PrintingScreen(
                         }
                         Text("按尺寸走纸；首张标签请人工对齐。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     } else {
+                        receiptLogo.getOrNull()?.let { bitmap ->
+                            Surface(color = Color.White, modifier = Modifier.align(Alignment.CenterHorizontally)) {
+                                Image(bitmap.asImageBitmap(), contentDescription = "$receiptVendor 品牌标志",
+                                    modifier = Modifier.widthIn(max = bitmap.width.dp).fillMaxWidth().aspectRatio(bitmap.width.toFloat() / bitmap.height))
+                            }
+                        }
                         displayed!!.textLines().forEachIndexed { index, line -> Text(line, style = if (index == 0) MaterialTheme.typography.titleSmall else MaterialTheme.typography.bodyMedium, color = if (index == 0) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant) }
                         receiptPreview.getOrNull()?.forEach { (payload, bitmap) ->
                             Surface(color = Color.White, shape = RoundedCornerShape(12.dp), modifier = Modifier.align(Alignment.CenterHorizontally)) {
@@ -147,7 +160,7 @@ fun PrintingScreen(
                         }
                         Text("小票预览显示打印内容，实际字距与排版由打印机决定。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    previewError?.let { Text("无法打印此模板：${it.message ?: "内容超出标签，请增大尺寸、减小字号或减少字段"}", color = MaterialTheme.colorScheme.error) }
+                    previewError?.let { Text("无法准备打印内容：${it.message ?: "内容超出标签，请增大尺寸、减小字号或减少字段"}", color = MaterialTheme.colorScheme.error) }
                 }
             }
         }
@@ -159,8 +172,8 @@ fun PrintingScreen(
             Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)) {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Text("打印前回抽 0.5 cm", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
-                        Switch(modifier = Modifier.semantics { contentDescription = "打印前回抽 0.5 厘米，连续小票纸实验功能" }, checked = retractBeforePrint, onCheckedChange = viewModel::setRetractBeforePrint,
+                        Text("打印前回抽 1 cm", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
+                        Switch(modifier = Modifier.semantics { contentDescription = "打印前回抽 1 厘米，连续小票纸实验功能" }, checked = retractBeforePrint, onCheckedChange = viewModel::setRetractBeforePrint,
                             enabled = !busy && !quarantined && (retractBeforePrint || retractionUnavailableReason == null))
                     }
                     Text("实验功能，仅用于连续小票纸；标签纸不回抽。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
