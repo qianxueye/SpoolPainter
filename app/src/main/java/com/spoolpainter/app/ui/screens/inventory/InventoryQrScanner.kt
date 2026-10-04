@@ -21,9 +21,15 @@ import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Cameraswitch
+import androidx.compose.material.icons.filled.FlashlightOff
+import androidx.compose.material.icons.filled.FlashlightOn
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
@@ -54,7 +60,7 @@ internal fun InventoryQrScanner(onQr: (String) -> Unit, onDismiss: () -> Unit) {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             Column(Modifier.fillMaxSize().safeDrawingPadding().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("扫描库存二维码", style = MaterialTheme.typography.titleLarge)
-                Text("将完整二维码放入画面；轻点二维码对焦，光线不足时可开启补光。", style = MaterialTheme.typography.bodyMedium)
+                Text("将完整二维码放入画面，轻点二维码对焦；右下角手电筒图标可开关补光。", style = MaterialTheme.typography.bodyMedium)
                 if (permitted) CameraQrPreview(Modifier.weight(1f).fillMaxWidth(), onQr)
                 else {
                     Spacer(Modifier.weight(1f))
@@ -241,6 +247,11 @@ private fun CameraQrPreview(modifier: Modifier, onQr: (String) -> Unit) {
                             }
                         }
                     }
+                    // Each scan session and switch back to the rear camera starts
+                    // illuminated. The operator can turn it off immediately.
+                    if (bound.cameraInfo.lensFacing == CameraSelector.LENS_FACING_BACK && hasFlash && !torchOn) {
+                        toggleTorch?.invoke()
+                    }
                 } catch (e: Exception) { cameraError = "无法打开相机：${e.message.orEmpty()}" }
             }
         }, main)
@@ -266,15 +277,58 @@ private fun CameraQrPreview(modifier: Modifier, onQr: (String) -> Unit) {
         }
     }
     Column(modifier) {
-        AndroidView(factory = { previewView }, modifier = Modifier.weight(1f).fillMaxWidth())
-        Text(cameraLabel + if (hasFlash) (if (torchOn) " · 补光已开启" else " · 可开启补光") else " · 无补光灯", style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = 6.dp))
-        Text(focusStatus, style = MaterialTheme.typography.bodySmall)
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (hasFlash) OutlinedButton(onClick = { toggleTorch?.invoke() }, enabled = toggleTorch != null && !torchPending, modifier = Modifier.weight(1f)) {
-                Text(if (torchPending) "切换中…" else if (torchOn) "关闭补光" else "开启补光")
+        Box(Modifier.weight(1f).fillMaxWidth()) {
+            AndroidView(factory = { previewView }, modifier = Modifier.fillMaxSize())
+            Column(
+                Modifier.align(Alignment.BottomEnd).padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Surface(
+                    shape = CircleShape,
+                    color = if (torchOn) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+                    shadowElevation = 3.dp,
+                ) {
+                    IconToggleButton(
+                        checked = torchOn,
+                        onCheckedChange = { toggleTorch?.invoke() },
+                        enabled = hasFlash && toggleTorch != null && !torchPending,
+                        modifier = Modifier.size(48.dp),
+                        colors = IconButtonDefaults.iconToggleButtonColors(
+                            contentColor = MaterialTheme.colorScheme.onSurface,
+                            checkedContentColor = MaterialTheme.colorScheme.onPrimary,
+                            disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+                        ),
+                    ) {
+                        Icon(
+                            imageVector = if (torchOn) Icons.Filled.FlashlightOn else Icons.Filled.FlashlightOff,
+                            contentDescription = when {
+                                !hasFlash -> "此相机没有补光灯"
+                                torchPending -> "补光灯正在切换"
+                                torchOn -> "关闭补光"
+                                else -> "开启补光"
+                            },
+                        )
+                    }
+                }
+                if (canSwitchCamera) Surface(
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+                    shadowElevation = 3.dp,
+                ) {
+                    IconButton(onClick = { frontCamera = !frontCamera }, enabled = !torchPending, modifier = Modifier.size(48.dp)) {
+                        Icon(Icons.Filled.Cameraswitch, contentDescription = "切换前后相机", tint = MaterialTheme.colorScheme.onSurface)
+                    }
+                }
             }
-            if (canSwitchCamera) TextButton(onClick = { frontCamera = !frontCamera }, enabled = !torchPending, modifier = Modifier.weight(1f)) { Text("切换相机") }
         }
+        Text(cameraLabel + when {
+            toggleTorch == null -> ""
+            !hasFlash -> " · 无补光灯"
+            torchPending -> " · 补光切换中"
+            torchOn -> " · 补光已开启"
+            else -> " · 补光已关闭"
+        }, style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = 6.dp))
+        Text(focusStatus, style = MaterialTheme.typography.bodySmall)
         controlError?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 4.dp)) }
         cameraError?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 8.dp)) }
     }
