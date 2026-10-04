@@ -32,6 +32,7 @@ import com.spoolpainter.app.domain.primitives.NfcIntent
 import com.spoolpainter.app.domain.primitives.NfcResult
 import com.spoolpainter.app.ui.screens.inventory.InventoryScreen
 import com.spoolpainter.app.ui.screens.printing.PrintingScreen
+import com.spoolpainter.app.ui.components.nfcErrorText
 import com.spoolpainter.app.hardware.printer.*
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -114,7 +115,7 @@ class MainActivity : ComponentActivity() {
                             else -> Column(Modifier.fillMaxSize()) {
                                 when (val current = nfcState) {
                                     NfcResult.Reading -> RowScanStatus("正在扫描耗材标签…", onStop = { lifecycleScope.launch { nfcRepository.disarm() } })
-                                    is NfcResult.Error -> Text("读卡失败：${current.reason}", Modifier.padding(12.dp))
+                                    is NfcResult.Error -> Text("读卡提示：${nfcErrorText(current.reason)}", Modifier.padding(12.dp))
                                     else -> Unit
                                 }
                                 InventoryScreen(
