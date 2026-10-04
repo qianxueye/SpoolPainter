@@ -32,6 +32,21 @@ class QrFrameDecoderTest {
         for (y in 0 until size) for (x in 0 until size) buffer.put(y * size + x, if (matrix[y, size - 1 - x]) 0.toByte() else 255.toByte())
         assertEquals(payload, QrFrameDecoder().decode(buffer, size, size, size, 1))
     }
+    @Test fun `small dim paper QR in a larger camera frame decodes`() {
+        val payload = "WEB+SPOOLMAN:S-28"
+        val qr = QRCodeWriter().encode(payload, BarcodeFormat.QR_CODE, 210, 210)
+        val width = 1280
+        val height = 720
+        val buffer = ByteBuffer.allocate(width * height)
+        for (y in 0 until height) for (x in 0 until width) {
+            val qx = x - 535
+            val qy = y - 255
+            val black = qx in 0 until qr.width && qy in 0 until qr.height && qr[qx, qy]
+            val ambient = 85 + x * 40 / width
+            buffer.put(y * width + x, (if (black) ambient - 65 else ambient).toByte())
+        }
+        assertEquals(payload, QrFrameDecoder().decode(buffer, width, height, width, 1))
+    }
     @Test fun `blank frame and truncated plane cannot produce a spurious selection`() {
         assertNull(QrFrameDecoder().decode(ByteBuffer.wrap(ByteArray(100 * 100) { 255.toByte() }), 100, 100, 100, 1))
         assertThrows(IllegalArgumentException::class.java) { QrFrameDecoder().decode(ByteBuffer.allocate(10), 100, 100, 100, 1) }
