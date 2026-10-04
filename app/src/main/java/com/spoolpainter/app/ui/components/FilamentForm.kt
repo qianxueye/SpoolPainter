@@ -151,7 +151,7 @@ fun FilamentForm(
 fun SaveToSpoolmanButton(
     enabled: Boolean,
     onClick: () -> Unit,
-    label: String = "Save to Spoolman",
+    label: String = "保存到 Spoolman",
     modifier: Modifier = Modifier,
 ) {
     Button(
@@ -170,7 +170,7 @@ fun SaveToSpoolmanButton(
         ),
     ) {
         Text(
-            text = label,
+            text = label.chineseUiText(),
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Medium,
         )
@@ -208,8 +208,8 @@ private fun VariantField(
     OutlinedTextField(
         value = value.orEmpty(),
         onValueChange = { input -> onChange(sanitiseVariant(input)) },
-        label = { Text("Variant (Wood, Pro, HS, etc.)") },
-        placeholder = { Text("Optional") },
+        label = { Text("型号（木质、Pro、HS 等）") },
+        placeholder = { Text("可选") },
         singleLine = true,
         enabled = enabled,
         modifier = Modifier

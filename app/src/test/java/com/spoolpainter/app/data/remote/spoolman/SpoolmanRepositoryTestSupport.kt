@@ -46,7 +46,7 @@ class SpoolmanRepositoryHarness(
             ioDispatcher = UnconfinedTestDispatcher(),
         )
         // The URL collector ran synchronously under UnconfinedTestDispatcher
-        // and auto-registered extra-field schemas. Clear the call log + the
+        // and refreshed read-only caches. Clear the call log + the
         // registered-field sets so tests start from a clean slate and assert
         // only on calls they explicitly trigger.
         fakeApi.callLog.clear()

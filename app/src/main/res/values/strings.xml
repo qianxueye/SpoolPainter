@@ -1,3 +1,12 @@
 <resources>
-    <string name="app_name">SpoolPainter</string>
+    <string name="app_name">SpoolPainter POS</string>
+    <string name="ui_cancel">取消</string>
+    <string name="ui_done">完成</string>
+    <string name="ui_save">保存</string>
+    <string name="ui_settings">设置</string>
+    <string name="ui_clear">清空</string>
+    <string name="ui_read_tag">读取标签</string>
+    <string name="ui_write_tag">写入标签</string>
+    <string name="ui_map_tag">关联标签</string>
+    <string name="ui_write_nfc">写入 NFC</string>
 </resources>

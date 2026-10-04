@@ -113,8 +113,8 @@ fun FilamentPicker(
             onValueChange = {},
             readOnly = true,
             enabled = enabled,
-            label = { Text("Pick existing filament") },
-            placeholder = { Text("Filaments in Spoolman") },
+            label = { Text("选择现有耗材") },
+            placeholder = { Text("Spoolman 中的耗材") },
             trailingIcon = {
                 if (selected != null && enabled) {
                     IconButton(
@@ -132,7 +132,7 @@ fun FilamentPicker(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Clear,
-                            contentDescription = "Clear filament selection",
+                            contentDescription = "清除耗材选择",
                             modifier = Modifier.size(24.dp),
                             tint = MaterialTheme.colorScheme.onSurface,
                         )
@@ -189,7 +189,7 @@ fun FilamentPicker(
                     PickerSearchField(
                         query = query,
                         onQueryChange = { query = it },
-                        placeholder = "Search filaments",
+                        placeholder = "搜索耗材",
                         testTag = "filament-picker-search",
                     )
                 },
@@ -215,14 +215,14 @@ private data class FilamentRowDisplay(
  * the form fields below, so re-stating them in the picker is noise.
  */
 private fun SpoolmanFilament.selectedDisplay(): String {
-    val filamentName = name?.takeIf { it.isNotBlank() } ?: material ?: "Unknown"
+    val filamentName = name?.takeIf { it.isNotBlank() } ?: material ?: "未知"
     return "$filamentName · #$id"
 }
 
 /** Bold first line of the open-dropdown row. */
 internal fun SpoolmanFilament.primaryRowText(): String {
     val vendorName = vendor?.name?.takeIf { it.isNotBlank() }
-    val filamentName = name?.takeIf { it.isNotBlank() } ?: material ?: "Unknown"
+    val filamentName = name?.takeIf { it.isNotBlank() } ?: material ?: "未知"
     return if (vendorName != null) "$vendorName · $filamentName" else filamentName
 }
 

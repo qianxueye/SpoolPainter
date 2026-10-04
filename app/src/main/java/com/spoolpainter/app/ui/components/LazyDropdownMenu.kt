@@ -111,7 +111,7 @@ fun <T : Any> LazyDropdownMenu(
             if (items.isEmpty()) {
                 // Header present + nothing matched the query (guarded above).
                 Text(
-                    text = "No matches",
+                    text = "没有匹配结果",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier

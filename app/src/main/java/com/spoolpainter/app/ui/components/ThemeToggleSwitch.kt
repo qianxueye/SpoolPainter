@@ -31,9 +31,9 @@ fun ThemeToggleSwitch(
             Icon(
                 imageVector = if (isDark) Icons.Filled.DarkMode else Icons.Filled.LightMode,
                 contentDescription = if (isDark) {
-                    "Theme: Dark (tap to switch to Light)"
+                    "主题：深色（点击切换为浅色）"
                 } else {
-                    "Theme: Light (tap to switch to Dark)"
+                    "主题：浅色（点击切换为深色）"
                 },
                 modifier = Modifier.size(SwitchDefaults.IconSize),
             )

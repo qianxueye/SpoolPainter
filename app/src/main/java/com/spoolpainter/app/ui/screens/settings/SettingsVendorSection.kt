@@ -87,13 +87,13 @@ internal fun SettingsVendorSection(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                text = "Vendor tag support",
+                text = "厂商标签支持",
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.weight(1f),
             )
             Icon(
                 imageVector = if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
-                contentDescription = if (expanded) "Collapse" else "Expand",
+                contentDescription = if (expanded) "收起" else "展开",
             )
         }
         if (expanded) {
@@ -114,7 +114,7 @@ internal fun SettingsVendorSection(
                 when (openVendor) {
                     VendorId.Bambu -> SingleKeyForm(
                         initial = bambuSalt,
-                        label = "Bambu Lab tag key",
+                        label = "Bambu Lab 标签密钥",
                         fieldTag = "$testTag-bambu-field",
                         saveTag = "$testTag-bambu-save",
                         onSave = onBambuSaltSaved,
@@ -189,7 +189,7 @@ private fun SingleKeyForm(
                     .wrapContentWidth()
                     .testTag(saveTag),
             ) {
-                Text(if (saved) "Saved" else "Save")
+                Text(if (saved) "已保存" else "保存")
             }
         }
     }
@@ -215,7 +215,7 @@ private fun CrealityKeyForm(
                 .fillMaxWidth()
                 .focusRequester(firstFieldFocusRequester)
                 .testTag("$testTag-creality-salt-field"),
-            label = { Text("Creality tag key") },
+            label = { Text("Creality 标签密钥") },
             textStyle = MaterialTheme.typography.bodyLarge,
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = MaterialTheme.colorScheme.primary,
@@ -230,7 +230,7 @@ private fun CrealityKeyForm(
             modifier = Modifier
                 .fillMaxWidth()
                 .testTag("$testTag-creality-enc-field"),
-            label = { Text("Creality encryption key") },
+            label = { Text("Creality 加密密钥") },
             textStyle = MaterialTheme.typography.bodyLarge,
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = MaterialTheme.colorScheme.primary,
@@ -249,7 +249,7 @@ private fun CrealityKeyForm(
                     .wrapContentWidth()
                     .testTag("$testTag-creality-save"),
             ) {
-                Text(if (unchanged) "Saved" else "Save")
+                Text(if (unchanged) "已保存" else "保存")
             }
         }
     }

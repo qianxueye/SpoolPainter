@@ -1,6 +1,13 @@
 package com.spoolpainter.app.hardware.nfc
 
 import android.nfc.Tag
+import com.spoolpainter.app.hardware.pos.PosNfcTransport
+import com.spoolpainter.app.hardware.pos.PosTagSession
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import android.util.Log
 import androidx.activity.ComponentActivity
 import com.spoolpainter.app.BuildConfig
@@ -25,6 +32,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.datetime.Clock
 import javax.inject.Inject
 import javax.inject.Singleton
+import java.util.concurrent.ConcurrentHashMap
 import com.spoolpainter.app.data.local.SettingsRepository
 
 @Singleton
@@ -36,6 +44,7 @@ open class NfcRepository internal constructor(
     private val settingsRepository: SettingsRepository,
     private val readLog: NfcReadLog?,
     private val ttlMs: Long,
+    private val posTransport: PosNfcTransport? = null,
 ) {
 
     @Inject
@@ -46,7 +55,8 @@ open class NfcRepository internal constructor(
         clock: Clock,
         settingsRepository: SettingsRepository,
         readLog: NfcReadLog,
-    ) : this(wrapper, scope, ioDispatcher, clock, settingsRepository, readLog, TTL_MS_DEFAULT)
+        posTransport: PosNfcTransport,
+    ) : this(wrapper, scope, ioDispatcher, clock, settingsRepository, readLog, TTL_MS_DEFAULT, posTransport)
 
     private val _state = MutableStateFlow<NfcResult>(NfcResult.Idle)
     open val state: StateFlow<NfcResult> = _state.asStateFlow()
@@ -55,19 +65,81 @@ open class NfcRepository internal constructor(
     open val lastSeenTag: StateFlow<TagBuffer?> = _lastSeenTag.asStateFlow()
 
     private val mutex = Mutex()
-    private var armedIntent: NfcIntent? = null
-    private var attached: ComponentActivity? = null
+    private val posLifecycleMutex = Mutex()
+    private val posPauseMutex = Mutex()
+    @Volatile private var posDisarming = false
+    @Volatile private var posPaused = false
+    @Volatile private var armedIntent: NfcIntent? = null
+    @Volatile private var attached: ComponentActivity? = null
+    private var posJob: Job? = null
+    // Cancelled scans can still be closing the shared POS hardware. Track them until
+    // cleanup completes so a printing transition cannot race a predecessor's close.
+    private val posJobs = ConcurrentHashMap.newKeySet<Job>()
+    private var posGeneration = 0L
+
+    private fun usePos(): Boolean = posTransport?.isAvailable() == true
+    fun isAvailable(): Boolean = usePos() || wrapper.isAvailable()
 
     fun attach(activity: ComponentActivity) {
         if (attached === activity) return
-        attached?.let { wrapper.disableForegroundDispatch(it) }
+        if (attached != null) detach()
         attached = activity
-        wrapper.enableForegroundDispatch(activity)
+        if (usePos()) {
+            if (armedIntent != null) startPosScan()
+        } else {
+            wrapper.enableForegroundDispatch(activity)
+        }
+    }
+
+    private fun startPosScan() {
+        if (posDisarming || posPaused) return
+        posJob?.cancel()
+        val generation = ++posGeneration
+        posJob = scope.launch(ioDispatcher) {
+            try {
+                posTransport!!.runForeground { session -> handlePosTag(session) }
+                mutex.withLock {
+                    if (generation == posGeneration && armedIntent != null) {
+                        armedIntent = null
+                        _state.value = NfcResult.Error("No POS NFC tag detected; try again")
+                    }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (t: Exception) {
+                mutex.withLock {
+                    if (generation == posGeneration) {
+                        armedIntent = null
+                        _state.value = NfcResult.Error("POS NFC: ${t.message}", t)
+                    }
+                }
+            }
+        }
+        posJob?.let { job ->
+            posJobs.add(job)
+            job.invokeOnCompletion { posJobs.remove(job) }
+        }
     }
 
     fun detach() {
         val active = attached ?: return
-        wrapper.disableForegroundDispatch(active)
+        if (usePos()) {
+            val generation = ++posGeneration
+            armedIntent = null
+            posJob?.cancel()
+            posJob = null
+            // POS has no Android NFC intent pause/resume cycle. Cancel the operation.
+            scope.launch {
+                mutex.withLock {
+                    if (generation == posGeneration) {
+                        armedIntent = null
+                        _state.value = NfcResult.Idle
+                    }
+                }
+            }
+        } else {
+            wrapper.disableForegroundDispatch(active)
+        }
         attached = null
         // Don't error-out an in-flight Write/Verify here. Android may cycle
         // through onPause → onResume when an NFC intent is dispatched (esp.
@@ -78,7 +150,8 @@ open class NfcRepository internal constructor(
     }
 
     open suspend fun arm(intent: NfcIntent) {
-        if (!wrapper.isAvailable()) {
+        if (usePos() && (posDisarming || posPaused)) return
+        if (!isAvailable()) {
             mutex.withLock {
                 armedIntent = null
                 _state.value = NfcResult.Error("NFC not available")
@@ -86,6 +159,7 @@ open class NfcRepository internal constructor(
             return
         }
         mutex.withLock {
+            if (usePos() && (posDisarming || posPaused)) return
             armedIntent = intent
             _state.value = when (intent) {
                 is NfcIntent.Read -> NfcResult.Reading
@@ -93,6 +167,7 @@ open class NfcRepository internal constructor(
                 is NfcIntent.Verify -> NfcResult.Verifying
             }
         }
+        if (usePos() && attached != null) startPosScan()
     }
 
     open suspend fun consumeLastSeen(intent: NfcIntent): NfcResult? {
@@ -117,14 +192,94 @@ open class NfcRepository internal constructor(
     }
 
     open suspend fun disarm() {
+        if (usePos()) {
+            posLifecycleMutex.withLock {
+                posDisarming = true
+                try {
+                    ++posGeneration
+                    mutex.withLock { armedIntent = null }
+                    val scans = posJobs.toList()
+                    scans.forEach { it.cancel() }
+                    posJob = null
+                    // PICC/MIFARE finally blocks perform blocking Binder cleanup. A cancelled
+                    // caller must still wait for that cleanup before allowing paper motion.
+                    withContext(NonCancellable) { scans.forEach { it.join() } }
+                    mutex.withLock { _state.value = NfcResult.Idle }
+                } finally {
+                    posDisarming = false
+                }
+            }
+            return
+        }
         mutex.withLock {
             armedIntent = null
             _state.value = NfcResult.Idle
         }
     }
 
+    /** Keep POS reader traffic excluded until a paper operation's final cleanup is finished. */
+    suspend fun withPosHardwarePaused(action: suspend () -> Unit) = posPauseMutex.withLock {
+        posPaused = true
+        try {
+            disarm()
+            action()
+        } finally {
+            posPaused = false
+        }
+    }
+
     fun onTagDiscovered(tag: Tag) {
         scope.launch { handleTag(tag) }
+    }
+
+    /** Called inside the hardware lease; session must never escape this callback. */
+    internal suspend fun handlePosTag(session: PosTagSession) {
+        try {
+            val raw = session.read()
+            currentCoroutineContext().ensureActive()
+            val classification = classify(raw)
+            _lastSeenTag.value = TagBuffer(raw.uid, classification, clock.now().toEpochMilliseconds())
+            val intent = mutex.withLock { armedIntent.also { armedIntent = null } }
+            when (intent) {
+                is NfcIntent.Read -> {
+                    _lastSeenTag.value = null
+                    transition { NfcResult.Success(raw.uid, classification) }
+                }
+                is NfcIntent.Write -> {
+                    if (intent.expectedUid != null && intent.expectedUid != raw.uid) {
+                        _lastSeenTag.value = null
+                        transition { NfcResult.Error("UID mismatch: expected ${intent.expectedUid}, detected ${raw.uid}") }
+                        return
+                    }
+                    if (classification is TagClassification.Vendor) {
+                        transition { NfcResult.Error("vendor-tag protected (FR-4.7): ${classification.reason}") }
+                        return
+                    }
+                    session.writeRecords(encodePayloadRecords(intent.payload))
+                    currentCoroutineContext().ensureActive()
+                    transition { NfcResult.Verifying }
+                    if (session.readRecords() != encodePayloadRecords(intent.payload)) {
+                        transition { NfcResult.Error("verify mismatch") }
+                    } else {
+                        val written = TagClassification.OpenSpool(intent.payload)
+                        _lastSeenTag.value = TagBuffer(raw.uid, written, clock.now().toEpochMilliseconds())
+                        transition { NfcResult.Success(raw.uid, written) }
+                    }
+                }
+                is NfcIntent.Verify -> {
+                    if (session.readRecords() == encodePayloadRecords(intent.expectedPayload)) {
+                        transition { NfcResult.Success(raw.uid, TagClassification.OpenSpool(intent.expectedPayload)) }
+                    } else transition { NfcResult.Error("verify mismatch") }
+                }
+                null -> Unit // Passive scans feed the same last-seen buffer as Android taps.
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (t: Exception) {
+            currentCoroutineContext().ensureActive()
+            Log.w(TAG, "POS tag operation failed", t)
+            mutex.withLock { armedIntent = null; _state.value = NfcResult.Error("POS NFC: ${t.message}", t) }
+        }
     }
 
     internal suspend fun handleTag(tag: Tag) {

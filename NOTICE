@@ -52,8 +52,8 @@ regression test data for the vendor tag processors. Creality fixtures
 are not included — they require a per-tag AES encryption key that
 upstream supplies via environment variable, not in the repository.
 
-Vendor trademarks — referral link artwork
------------------------------------------
+Vendor trademarks — referral links and receipt brand identification
+-------------------------------------------------------------------
 The Settings screen's "Support the project" section links to shops the
 maintainer has a referral arrangement with, and identifies each with that
 vendor's own logo:
@@ -71,9 +71,47 @@ vendor's own logo:
     the single asset here is tinted to the active theme's foreground
     colour, which is faithful to both.
 
-"Polymaker" and "Snapmaker" are trademarks of their respective owners.
+  app/src/main/res/drawable-nodpi/ic_inslogic_wordmark.png
+    Official INSLOGIC black wordmark, retrieved 2026-10-04 from the
+    manufacturer's logo ZIP linked by its resource page:
+    https://www.inslogic3d.com/pages/resources
+    https://cdn.shopify.com/s/files/1/0822/8611/7163/files/Inslogic_Logo.zip?v=1717245547
+    The bundled PNG is the original black artwork (1199 x 353 pixels).
+    The supplied brand guidelines approve the black artwork; receipt
+    rendering preserves its proportions without reshaping or effects.
+
+  app/src/main/res/drawable-nodpi/ic_bambulab_wordmark.png
+    Bambu Lab's official white SVG wordmark, retrieved 2026-10-04 from
+    https://www.bambu-lab.com/ and its referenced asset:
+    https://store.bblcdn.com/s1/default/22cb5d9f75654d8d88ef4a601b866351/logo.svg
+    Converted to a transparent PNG using Sharp/libvips, preserving the
+    artwork and proportions. Original retained at
+    docs/assets/bambulab-logo-source.svg. No Bambu Studio source is used.
+
+  app/src/main/res/drawable-nodpi/ic_kexcelled_wordmark.png
+    Official horizontal black Kexcelled logo, retrieved 2026-10-04 from
+    https://kexcelled3d.com/pages/download-center (Brand Logos):
+    https://drive.google.com/drive/folders/1aVrBoE0XaL8ocJQLYdGuPEKwUWEaOOr-
+    Print pack folder: 1omiRkbrZwKwUaKxOdDDlMdMLIKDkvLZG
+    Source filename: Logo horizontal- black.png
+    https://drive.usercontent.google.com/download?id=1gfZe9RR1Hkp7wDHVzuxlDWe9wHGA_adR&export=download
+    Cropped only the surrounding transparent canvas to the artwork's
+    alpha bounds (1582 x 378 pixels); no artwork was reshaped. Original
+    retained at docs/assets/kexcelled-logo-print-source.png.
+
+Continuous receipts also use these marks to identify the spool's vendor
+when its name exactly matches INSLOGIC, Polymaker, Snapmaker, Bambu Lab
+or Kexcelled (ignoring case and surrounding whitespace). BambuLab and
+拓竹 are explicit aliases of Bambu Lab; unknown brands retain text.
+Receipt artwork is printed black on
+white, with its original alpha silhouette and aspect ratio preserved;
+the existing Settings referral artwork retains its appearance.
+
+"INSLOGIC", "Polymaker", "Snapmaker", "Bambu Lab" and "Kexcelled" are
+trademarks of their respective owners.
 They are reproduced here only to identify the store each referral link
-points to (nominative use). SpoolPainter is an independent project and is
-not affiliated with, endorsed by, or sponsored by either company. Neither
-logo is covered by SpoolPainter's GPL-3.0 licence; if either vendor's
+points to or the spool brand on a receipt (nominative use). SpoolPainter
+is an independent project and is not affiliated with, endorsed by, or
+sponsored by these companies. None of these
+logos is covered by SpoolPainter's GPL-3.0 licence; if any vendor's
 brand guidelines require changes, replace or remove the asset above.

@@ -1,5 +1,7 @@
 package com.spoolpainter.app.ui.screens.settings
 
+import com.spoolpainter.app.ui.components.chineseUiText
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -61,10 +63,10 @@ internal fun <T : Enum<T>> SettingsSortSection(
             modifier = Modifier.fillMaxWidth(),
         ) {
             OutlinedTextField(
-                value = keyLabel(selectedKey),
+                value = keyLabel(selectedKey).chineseUiText(),
                 onValueChange = {},
                 readOnly = true,
-                label = { Text("Sort by") },
+                label = { Text("排序方式") },
                 trailingIcon = {
                     ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
                 },
@@ -85,7 +87,7 @@ internal fun <T : Enum<T>> SettingsSortSection(
             ) {
                 keys.forEach { option ->
                     DropdownMenuItem(
-                        text = { Text(keyLabel(option)) },
+                        text = { Text(keyLabel(option).chineseUiText()) },
                         onClick = {
                             expanded = false
                             if (option != selectedKey) onKeySelected(option)
@@ -114,7 +116,7 @@ internal fun <T : Enum<T>> SettingsSortSection(
                         contentDescription = null,
                         modifier = Modifier.size(18.dp),
                     )
-                    Text("Ascending")
+                    Text("升序")
                 }
             }
             SegmentedButton(
@@ -135,7 +137,7 @@ internal fun <T : Enum<T>> SettingsSortSection(
                         contentDescription = null,
                         modifier = Modifier.size(18.dp),
                     )
-                    Text("Descending")
+                    Text("降序")
                 }
             }
         }

@@ -103,7 +103,7 @@ internal fun VendorTagSupportList(
                 ) {
                     Icon(
                         imageVector = Icons.Filled.PowerSettingsNew,
-                        contentDescription = if (row.ready) "Working" else "Missing key",
+                        contentDescription = if (row.ready) "可用" else "缺少密钥",
                         tint = if (row.ready) ReadyGreen else MissingRed,
                         modifier = Modifier.size(20.dp),
                     )
@@ -226,7 +226,7 @@ private fun KeyButton(row: VendorRowSpec, isSelected: Boolean, onClick: () -> Un
         Box(contentAlignment = Alignment.Center, modifier = Modifier.size(36.dp)) {
             Icon(
                 imageVector = Icons.Outlined.VpnKey,
-                contentDescription = "Enter ${row.label} key",
+                contentDescription = "输入 ${row.label} 密钥",
                 modifier = Modifier.size(18.dp),
             )
         }

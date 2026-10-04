@@ -1,5 +1,10 @@
 package com.spoolpainter.app.ui.screens.settings
 
+import com.spoolpainter.app.ui.components.chineseUiText
+
+import androidx.compose.ui.res.stringResource
+import com.spoolpainter.app.R
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -65,7 +70,7 @@ fun SettingsScreen(
     LaunchedEffect(Unit) {
         viewModel.effects.collect { effect ->
             if (effect is UiEffect.ShowSnackbar) {
-                snackbarHostState.showSnackbar(effect.message)
+                snackbarHostState.showSnackbar(effect.message.chineseUiText())
             }
         }
     }
@@ -76,10 +81,10 @@ fun SettingsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Settings") },
+                title = { Text(stringResource(R.string.ui_settings)) },
                 navigationIcon = {
                     IconButton(onClick = onBack, modifier = Modifier.testTag("settings-back")) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
                     }
                 },
                 actions = {
@@ -116,7 +121,7 @@ fun SettingsScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("settings-url-field"),
-                label = { Text("Spoolman URL") },
+                label = { Text("Spoolman 地址") },
                 placeholder = { Text("http://192.168.1.100:7912") },
                 textStyle = androidx.compose.material3.MaterialTheme.typography.bodyLarge,
                 colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
@@ -131,7 +136,7 @@ fun SettingsScreen(
                     .fillMaxWidth()
                     .testTag("settings-save"),
             ) {
-                Text("Save")
+                Text(stringResource(R.string.ui_save))
             }
             OutlinedButton(
                 onClick = viewModel::onRefreshTapped,
@@ -139,10 +144,10 @@ fun SettingsScreen(
                     .fillMaxWidth()
                     .testTag("settings-refresh"),
             ) {
-                Text("Refresh spool list")
+                Text("刷新料盘列表")
             }
             SettingsSortSection(
-                label = "Spool list sort",
+                label = "料盘列表排序",
                 selectedKey = state.spoolSortKey,
                 direction = state.spoolSortDirection,
                 keys = SpoolSortKey.values(),
@@ -152,7 +157,7 @@ fun SettingsScreen(
                 testTag = "settings-spool-sort",
             )
             SettingsSortSection(
-                label = "Filament list sort",
+                label = "耗材列表排序",
                 selectedKey = state.filamentSortKey,
                 direction = state.filamentSortDirection,
                 keys = FilamentSortKey.values(),
@@ -188,7 +193,7 @@ fun SettingsScreen(
                     },
                     modifier = Modifier.testTag("settings-feedback"),
                 ) {
-                    Text("Send feedback")
+                    Text("发送反馈")
                 }
             }
             // Tester quick-feedback: copy the last NFC scan diagnostic to the
@@ -215,7 +220,7 @@ fun SettingsScreen(
                     enabled = viewModel.hasNfcReads(),
                     modifier = Modifier.testTag("settings-share-nfc"),
                 ) {
-                    Text("Report a tag issue")
+                    Text("报告标签问题")
                 }
             }
         }

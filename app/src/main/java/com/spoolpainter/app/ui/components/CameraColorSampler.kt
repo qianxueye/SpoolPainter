@@ -1,5 +1,8 @@
 package com.spoolpainter.app.ui.components
 
+import androidx.compose.ui.res.stringResource
+import com.spoolpainter.app.R
+
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.SystemClock
@@ -152,7 +155,7 @@ fun CameraColorSampler(
                 else -> {
                     // Waiting on the permission dialog result.
                     Text(
-                        "Requesting camera permission...",
+                        "正在请求相机权限…",
                         color = Color.White,
                         modifier = Modifier
                             .align(Alignment.Center)
@@ -174,7 +177,7 @@ private fun PermissionDeniedContent(onDismiss: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
-            "Camera permission is needed to sample a color. You can still pick a color by hand.",
+            "使用相机取色需要相机权限。也可以手动选择颜色。",
             color = Color.White,
             style = MaterialTheme.typography.bodyLarge,
         )
@@ -184,7 +187,7 @@ private fun PermissionDeniedContent(onDismiss: () -> Unit) {
                 .padding(top = 16.dp)
                 .testTag("camera-sampler-cancel"),
             shape = RoundedCornerShape(16.dp),
-        ) { Text("Close") }
+        ) { Text("关闭") }
     }
 }
 
@@ -296,7 +299,7 @@ private fun SamplerContent(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text(
-                "Center the circle on the filament. Tweak the color if needed.",
+                "将圆圈对准耗材，必要时调整颜色。",
                 color = Color.White,
                 style = MaterialTheme.typography.bodyMedium,
             )
@@ -308,7 +311,7 @@ private fun SamplerContent(
                     onClick = onDismiss,
                     shape = RoundedCornerShape(16.dp),
                     modifier = Modifier.testTag("camera-sampler-cancel"),
-                ) { Text("Cancel") }
+                ) { Text(stringResource(R.string.ui_cancel)) }
                 Button(
                     onClick = { onPick(hex) },
                     shape = RoundedCornerShape(16.dp),
@@ -322,7 +325,7 @@ private fun SamplerContent(
                         contentDescription = null,
                         modifier = Modifier.size(18.dp),
                     )
-                    Text("  Use this color")
+                    Text("使用此颜色")
                 }
             }
         }

@@ -1,5 +1,8 @@
 package com.spoolpainter.app.ui.components.sheets
 
+import androidx.compose.ui.res.stringResource
+import com.spoolpainter.app.R
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -37,17 +40,17 @@ fun PairAnotherTagSheet(
         ) {
             Text(
                 text = if (state.isVendorPair) {
-                    "Tag linked. Pair another tag with this spool?"
+                    "标签已关联。是否为此料盘再关联一个标签？"
                 } else {
-                    "Saved. Pair another tag with this spool?"
+                    "已保存。是否为此料盘再关联一个标签？"
                 },
                 style = MaterialTheme.typography.titleMedium,
             )
             Text(
                 text = if (state.isVendorPair) {
-                    "Tap a tag to link it to the same spool."
+                    "请将标签靠近读卡器，以关联到同一料盘。"
                 } else {
-                    "We'll write the same data to the second tag and remember both."
+                    "将向第二个标签写入相同数据，并保存两个标签的关联。"
                 },
                 style = MaterialTheme.typography.bodyMedium,
             )
@@ -59,13 +62,13 @@ fun PairAnotherTagSheet(
                     onClick = onDismiss,
                     modifier = Modifier.testTag("pair-another-tag-sheet-done"),
                 ) {
-                    Text("Done")
+                    Text(stringResource(R.string.ui_done))
                 }
                 Button(
                     onClick = onAccept,
                     modifier = Modifier.testTag("pair-another-tag-sheet-accept"),
                 ) {
-                    Text("Pair another")
+                    Text("再关联一个")
                 }
             }
         }

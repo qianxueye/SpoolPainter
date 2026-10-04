@@ -39,7 +39,7 @@ internal fun SettingsCurrencySection(
             .testTag(testTag),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Text(text = "Currency", style = MaterialTheme.typography.bodyMedium)
+        Text(text = "货币", style = MaterialTheme.typography.bodyMedium)
         ExposedDropdownMenuBox(
             expanded = expanded,
             onExpandedChange = { expanded = !expanded },
