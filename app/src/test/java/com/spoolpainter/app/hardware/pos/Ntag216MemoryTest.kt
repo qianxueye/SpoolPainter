@@ -22,6 +22,50 @@ class Ntag216MemoryTest {
             assertArrayEquals(protectedBefore, sdk.memory.copyOfRange(222 * 4, sdk.memory.size))
         }
     }
+    @Test fun `empty NDEF does not read unused pages after the first user chunk`() = runTest {
+        val fake = FakePosSdk()
+        byteArrayOf(3, 0, 0xfe.toByte(), 0).copyInto(fake.memory, 16)
+        val reads = mutableListOf<Int>()
+        val sdk = object : PosReaderSdk by fake {
+            override fun readPages(page: Int): ByteArray {
+                reads += page
+                if (page > 4) throw PosReaderException("RF failed on unused page")
+                return fake.readPages(page)
+            }
+        }
+        assertNull(Ntag216Memory(sdk, fake.uid).readRecords())
+        assertEquals(listOf(0, 4), reads)
+    }
+    @Test fun `short NDEF reads only pages containing its declared payload`() = runTest {
+        val fake = FakePosSdk()
+        val expected = records(64)
+        Ntag216Memory(fake, fake.uid).writeRecords(expected)
+        val encodedSize = PosNdefCodec.encode(expected).size + 2
+        val lastReadPage = 4 + ((encodedSize - 1) / 16) * 4
+        val reads = mutableListOf<Int>()
+        val sdk = object : PosReaderSdk by fake {
+            override fun readPages(page: Int): ByteArray {
+                reads += page
+                if (page > lastReadPage) throw PosReaderException("RF failed after complete payload")
+                return fake.readPages(page)
+            }
+        }
+        assertEquals(expected, Ntag216Memory(sdk, fake.uid).readRecords())
+        assertEquals(lastReadPage, reads.last())
+        assertEquals(reads.distinct(), reads)
+    }
+    @Test fun `declared overcapacity NDEF is rejected before fetching its payload`() = runTest {
+        val fake = FakePosSdk()
+        byteArrayOf(3, 0xff.toByte(), 4, 0).copyInto(fake.memory, 16)
+        val sdk = object : PosReaderSdk by fake {
+            override fun readPages(page: Int): ByteArray {
+                check(page <= 4) { "must not read invalid payload" }
+                return fake.readPages(page)
+            }
+        }
+        try { Ntag216Memory(sdk, fake.uid).readRecords(); fail("must reject") }
+        catch (e: PosReaderException) { assertTrue(e.message!!.contains("exceeds")) }
+    }
     @Test fun `locked password protected or malformed capability refuses every write`() = runTest {
         val mutations: List<(FakePosSdk) -> Unit> = listOf(
             { it.memory[10] = 1 }, { it.memory[11] = 1 },

@@ -236,6 +236,7 @@ open class NfcRepository internal constructor(
             throw e
         } catch (t: Exception) {
             currentCoroutineContext().ensureActive()
+            Log.w(TAG, "POS tag operation failed", t)
             mutex.withLock { armedIntent = null; _state.value = NfcResult.Error("POS NFC: ${t.message}", t) }
         }
     }

@@ -53,22 +53,32 @@ internal class Ntag216Memory(private val sdk: PosReaderSdk, private val uid: Byt
 
     suspend fun readRecords(): List<NdefRecordView>? {
         header(false)
-        val data = userMemory()
+        // Fetch only the TLV header and declared NDEF payload. Reading unused pages
+        // prolongs the RF lease and can fail after a complete empty/short tag was read.
+        val chunks = mutableMapOf<Int, ByteArray>()
+        suspend fun byteAt(index: Int): Int {
+            if (index !in 0 until CAPACITY) throw PosReaderException("Truncated Type-2 TLV")
+            val chunk = index / 16
+            val data = chunks[chunk] ?: pages(4 + chunk * 4).also { chunks[chunk] = it }
+            return data[index % 16].u()
+        }
         var offset = 0
-        while (offset < data.size) {
-            when (val type = data[offset++].u()) {
+        while (offset < CAPACITY) {
+            when (val type = byteAt(offset++)) {
                 0 -> continue
                 0xfe -> return null
                 else -> {
-                    if (offset >= data.size) throw PosReaderException("Truncated Type-2 TLV")
-                    var length = data[offset++].u()
+                    var length = byteAt(offset++)
                     if (length == 255) {
-                        if (offset + 2 > data.size) throw PosReaderException("Truncated Type-2 length")
-                        length = (data[offset].u() shl 8) or data[offset + 1].u()
-                        offset += 2
+                        length = (byteAt(offset++) shl 8) or byteAt(offset++)
                     }
-                    if (offset + length > data.size) throw PosReaderException("NDEF exceeds capability container")
-                    if (type == 3) return if (length == 0) null else PosNdefCodec.decode(data.copyOfRange(offset, offset + length))
+                    if (offset + length > CAPACITY) throw PosReaderException("NDEF exceeds capability container")
+                    if (type == 3) {
+                        if (length == 0) return null
+                        val message = ByteArray(length)
+                        for (index in message.indices) message[index] = byteAt(offset + index).toByte()
+                        return PosNdefCodec.decode(message)
+                    }
                     offset += length
                 }
             }
