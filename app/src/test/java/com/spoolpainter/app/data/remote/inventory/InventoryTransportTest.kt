@@ -15,21 +15,50 @@ import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
 import java.util.concurrent.TimeUnit
+import java.net.InetAddress
 
 class InventoryTransportTest {
     private lateinit var server: MockWebServer
     private lateinit var repository: InventoryRepository
     private val settings = mockk<SettingsRepository>()
     private fun json(value: String) = JsonParser.parseString(value).asJsonObject
-    private val base get() = server.url("/").toString().trimEnd('/')
+    private val base get() = server.url("/").newBuilder().host("127.0.0.1").build().toString().trimEnd('/')
     private val spool = """{"id":1,"filament":{"id":2},"spool_weight":200,"remaining_weight":800,"used_weight":200,"location":"A","extra":{"card_uids":"\"04A1B2C3D4E5A0\"","tag":"\"keep\""}}"""
     @Before fun setup() {
-        server = MockWebServer().apply { start() }
+        // Bind one explicit address so disconnect tests exercise request recovery,
+        // rather than localhost IPv4/IPv6 route selection after a failed socket.
+        server = MockWebServer().apply { start(InetAddress.getByName("127.0.0.1"), 0) }
         coEvery { settings.awaitSettings() } answers { Settings(url = base) }
         repository = InventoryRepository(settings, OkHttpClient.Builder().readTimeout(300, TimeUnit.MILLISECONDS).build())
     }
     @After fun close() { server.shutdown() }
     private fun enqueue(value: String, code: Int = 200) { server.enqueue(MockResponse().setResponseCode(code).setBody(value).addHeader("Content-Type", "application/json")) }
+    @Test fun `interrupted read retries once and returns fresh spool`() = runTest {
+        server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.DISCONNECT_AFTER_REQUEST))
+        enqueue(spool)
+        assertEquals(1, repository.get("spool", 1, base).recordId())
+        assertEquals(2, server.requestCount)
+        repeat(2) {
+            val request = server.takeRequest()
+            assertEquals("GET", request.method)
+            assertEquals("/api/v1/spool/1", request.path)
+        }
+    }
+    @Test fun `read retries are bounded when connection remains interrupted`() = runTest {
+        repeat(2) { server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.DISCONNECT_AFTER_REQUEST)) }
+        try { repository.get("spool", 1, base); fail("must fail after one retry") }
+        catch (e: InventoryFailure) { assertFalse(e.unknownOutcome) }
+        assertEquals(2, server.requestCount)
+    }
+    @Test fun `disconnected consumption never replays a dispatched write`() = runTest {
+        enqueue(spool)
+        server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.DISCONNECT_AFTER_REQUEST))
+        try { repository.weight(json(spool), 25.0, false, base); fail("must require readback") }
+        catch (e: InventoryFailure) { assertTrue(e.unknownOutcome) }
+        assertEquals(2, server.requestCount)
+        assertEquals("GET", server.takeRequest().method)
+        assertEquals("PUT", server.takeRequest().method)
+    }
     @Test fun `patch gets fresh spool then sends metadata only`() = runTest {
         enqueue(spool.replace("\"remaining_weight\":800", "\"remaining_weight\":650"))
         enqueue(spool.replace("\"location\":\"A\"", "\"location\":\"B\""))

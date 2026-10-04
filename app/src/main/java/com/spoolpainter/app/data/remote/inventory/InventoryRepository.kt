@@ -32,7 +32,14 @@ class InventoryRepository @Inject constructor(private val settings: SettingsRepo
         return url to api
     }
     private suspend fun <T> request(write: Boolean = false, block: suspend () -> Response<T>): T {
-        val response = try { block() } catch (e: IOException) {
+        // A pooled keep-alive socket may have been closed by the server while the
+        // operator was scanning. Reissue a read once; never replay a mutation.
+        val response = try {
+            try { block() } catch (e: IOException) {
+                if (write) throw e
+                block()
+            }
+        } catch (e: IOException) {
             throw InventoryFailure(if (write) "请求中断，保存结果未知。请刷新核对后再操作，切勿直接重复提交。${e.message.orEmpty()}" else "无法连接服务器：${e.message.orEmpty()}", write)
         } catch (e: JsonParseException) {
             throw InventoryFailure(if (write) "服务器响应无法解析，保存结果未知；请刷新核对。" else "服务器响应无法解析：${e.message.orEmpty()}", write)
