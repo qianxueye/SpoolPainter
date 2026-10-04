@@ -10,7 +10,7 @@ public final class PaperProtocol {
 
     public static byte[] statusRequest(int sequence) { return frame(sequence, 0x30, new byte[0]); }
     public static void validateRetractionUnits(int units) {
-        require(units >= 8 && units <= 240 && units % 8 == 0, "回抽距离须为 0.1–3.0 cm，步进 0.1 cm");
+        require(units >= 2 && units <= 720 && units % 2 == 0, "回抽电机计数须为 2–720 的偶数");
     }
     public static byte[] retractRequest(int sequence, int units) {
         validateRetractionUnits(units);

@@ -2,6 +2,9 @@ package com.spoolpainter.app.hardware.printer
 
 import com.spoolpainter.app.hardware.paper.MotionUnknown
 import com.spoolpainter.app.hardware.paper.PaperMotion
+import com.spoolpainter.app.hardware.paper.RetractionMotionRequest
+import com.spoolpainter.app.hardware.paper.RetractionDistance
+import com.spoolpainter.app.hardware.paper.RetractionCalibration
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.CompletableDeferred
@@ -97,7 +100,9 @@ class PrinterController(
         port.prepare(job.request)
         if (job.request.retractBeforePrint) {
             mutableState.value = PrintState.Working(id, "正在回抽纸张并核验结果…")
-            paperMotion.retractBeforePrint(job.request.retractUnits)
+            paperMotion.retractBeforePrint(RetractionMotionRequest(
+                RetractionDistance(job.request.retractUnits), RetractionCalibration(job.request.retractCalibrationPercent),
+            ))
         }
         val done = CompletableDeferred<Completion>()
         val listener = object : PrinterPort.Listener {

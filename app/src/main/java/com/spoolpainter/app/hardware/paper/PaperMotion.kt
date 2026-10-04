@@ -7,7 +7,7 @@ import android.content.pm.PackageManager
 class MotionUnknown(message: String, cause: Throwable? = null) : Exception(message, cause)
 
 fun interface PaperMotion {
-    suspend fun retractBeforePrint(units: Int)
+    suspend fun retractBeforePrint(request: RetractionMotionRequest)
     fun checkNoPending() {}
 }
 

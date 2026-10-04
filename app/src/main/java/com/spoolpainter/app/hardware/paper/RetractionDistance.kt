@@ -2,9 +2,9 @@ package com.spoolpainter.app.hardware.paper
 
 import java.math.BigDecimal
 
-/** Requested raw units, using the app's nominal eight-unit/mm sizing assumption. */
+/** Legacy UI amount encoding (80 per requested cm), retained to preserve saved distance choices. */
 data class RetractionDistance(val units: Int = DEFAULT_UNITS) {
-    init { PaperProtocol.validateRetractionUnits(units) }
+    init { require(units in 8..240 && units % 8 == 0) { "回抽距离须为 0.1–3.0 cm，步进 0.1 cm" } }
     val centimeters: Double get() = units / 80.0
     val centimetersText: String get() = BigDecimal.valueOf(units.toLong())
         .divide(BigDecimal.valueOf(80)).setScale(1).toPlainString()

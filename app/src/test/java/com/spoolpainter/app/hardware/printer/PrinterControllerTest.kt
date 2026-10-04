@@ -2,6 +2,7 @@ package com.spoolpainter.app.hardware.printer
 
 import com.spoolpainter.app.hardware.paper.MotionUnknown
 import com.spoolpainter.app.hardware.paper.PaperMotion
+import com.spoolpainter.app.hardware.paper.RetractionMotionRequest
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.advanceTimeBy
@@ -88,7 +89,7 @@ class PrinterControllerTest {
     @Test fun unresolvedPersistedMotionBlocksEvenANormalReceiptBeforeOpen() = runTest {
         val port = FakePort()
         val controller = PrinterController(port, backgroundScope, paperMotion = object : PaperMotion {
-            override suspend fun retractBeforePrint(units: Int) = Unit
+            override suspend fun retractBeforePrint(request: RetractionMotionRequest) = Unit
             override fun checkNoPending() { throw MotionUnknown("存在未确认回抽") }
         })
         controller.enqueue(request(), PaperTail.ONE_CM)
@@ -115,8 +116,8 @@ class PrinterControllerTest {
     @Test fun eachQueuedJobCapturesItsOwnDistance() = runTest {
         val port = FakePort()
         val distances = mutableListOf<Int>()
-        val controller = PrinterController(port, backgroundScope, paperMotion = PaperMotion { units -> distances += units })
-        controller.enqueue(request(1).copy(retractBeforePrint = true, retractUnits = 40), PaperTail.ONE_CM)
+        val controller = PrinterController(port, backgroundScope, paperMotion = PaperMotion { motion -> distances += motion.rawUnits })
+        controller.enqueue(request(1).copy(retractBeforePrint = true, retractUnits = 40, retractCalibrationPercent = 100), PaperTail.ONE_CM)
         controller.enqueue(request(2).copy(retractBeforePrint = true, retractUnits = 120), PaperTail.ONE_CM)
         controller.enqueue(request(3).copy(retractBeforePrint = false, retractUnits = 240), PaperTail.ONE_CM)
         runCurrent()
@@ -124,7 +125,7 @@ class PrinterControllerTest {
             port.callbacks[index].onFinish()
             runCurrent()
         }
-        assertEquals(listOf(40, 120), distances)
+        assertEquals(listOf(40, 240), distances)
         assertEquals(listOf(40, 120, 240), port.requests.map { it.retractUnits })
     }
 
