@@ -1,5 +1,6 @@
 package com.spoolpainter.app.hardware.printer
 
+import com.spoolpainter.app.hardware.paper.RetractionDistance
 import java.net.URI
 import java.util.Locale
 
@@ -30,10 +31,12 @@ data class PrintRequest(
     val qrMode: LabelQrMode = LabelQrMode.WEB,
     val paper: PaperTemplate? = null,
     val retractBeforePrint: Boolean = false,
+    val retractUnits: Int = RetractionDistance.DEFAULT_UNITS,
 ) {
     init { validatePrintOptions() }
 
     fun validatePrintOptions() {
+        RetractionDistance(retractUnits)
         require(!retractBeforePrint || paper == null) { "打印前回抽仅支持连续小票，不能用于定长标签" }
     }
 

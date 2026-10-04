@@ -5,18 +5,30 @@ import java.util.Arrays;
 /** Closed packet vocabulary for this reviewed diagnostic; no arbitrary command constructor. */
 public final class PaperProtocol {
     private PaperProtocol() {}
-    public static final int RETRACT_UNITS = -80;
-    private static final byte[] BACKWARD = {(byte) 0x45, 4, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xb0};
     private static final byte[] STATUS_PREFIX = {1, 1, (byte) 0x80, (byte) 0xff, (byte) 0xff, 1, 5, 'L', 'T', 'P', '0', '2', 2, 1};
     public static final String EXPECTED_VERSION = "SP_V1.01.007 YC02FF00 241121";
 
     public static byte[] statusRequest(int sequence) { return frame(sequence, 0x30, new byte[0]); }
-    public static byte[] retractRequest(int sequence) { return frame(sequence, 0x33, BACKWARD); }
+    public static void validateRetractionUnits(int units) {
+        require(units >= 8 && units <= 240 && units % 8 == 0, "回抽距离须为 0.1–3.0 cm，步进 0.1 cm");
+    }
+    public static byte[] retractRequest(int sequence, int units) {
+        validateRetractionUnits(units);
+        int signed = -units;
+        byte[] payload = {0x45, 4, (byte) (signed >>> 24), (byte) (signed >>> 16), (byte) (signed >>> 8), (byte) signed};
+        return frame(sequence, 0x33, payload);
+    }
 
     public static void requireWhitelistedRequest(byte[] request) {
         require(request != null && request.length >= 7, "请求格式无效");
         int sequence = request[3] & 255;
-        require(Arrays.equals(request, statusRequest(sequence)) || Arrays.equals(request, retractRequest(sequence)), "仅允许普通状态请求与固定 -80 单位回抽");
+        if (Arrays.equals(request, statusRequest(sequence))) return;
+        require(request.length == 13, "回抽数据包长度无效");
+        int signed = ((request[7] & 255) << 24) | ((request[8] & 255) << 16) | ((request[9] & 255) << 8) | (request[10] & 255);
+        require(signed < 0 && signed != Integer.MIN_VALUE, "仅允许经过验证的负向回抽距离");
+        int units = -signed;
+        validateRetractionUnits(units);
+        require(Arrays.equals(request, retractRequest(sequence, units)), "回抽数据包格式或校验和无效");
     }
 
     private static byte[] frame(int sequence, int command, byte[] payload) {

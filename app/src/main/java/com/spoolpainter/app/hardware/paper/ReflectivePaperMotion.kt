@@ -44,13 +44,14 @@ class ReflectivePaperMotion(
         }
     }
 
-    override suspend fun retractBeforePrint() = mutex.withLock {
+    override suspend fun retractBeforePrint(units: Int) = mutex.withLock {
+        val distance = RetractionDistance(units)
         checkNoPending()
         paperMotionUnavailableReason(app)?.let { throw IllegalStateException(it) }
         withQuiescentHardware {
             // NFC remains paused through capture, movement, post-cleanup, final proof and close.
             currentCoroutineContext().ensureActive()
-            val operation = Operation(currentCoroutineContext()[Job])
+            val operation = Operation(currentCoroutineContext()[Job], distance)
             coroutineScope {
                 val watchdog = launch { delay(10_000); operation.timedOut = true }
                 try {
@@ -86,7 +87,7 @@ class ReflectivePaperMotion(
             saveAudit(op, op.preProof, "PRE_NATIVE_PROOF_OK")
             ensureActive(op)
             check(preferences.edit().putBoolean("pending", true).putString("operation", op.id).commit()) { "无法保存回抽状态，未发送移动请求" }
-            op.feed = transmit(sdk, op, PaperProtocol.retractRequest(ids[1]), movement = true)
+            op.feed = transmit(sdk, op, PaperProtocol.retractRequest(ids[1], op.distance.units), movement = true)
             PaperProtocol.successData(unhex(op.feed!!.rxHex), ids[1], 0x33)
             op.feedVerified = true
         } catch (error: Throwable) {
@@ -193,7 +194,7 @@ class ReflectivePaperMotion(
     private fun unhex(value: String) = ByteArray(value.length / 2) { value.substring(it * 2, it * 2 + 2).toInt(16).toByte() }
 
     private fun saveAudit(op: Operation, proof: NativeLogAudit.Result?, outcome: String) {
-        val json = JSONObject().put("operation", op.id).put("fixed_units", PaperProtocol.RETRACT_UNITS).put("outcome", outcome)
+        val json = JSONObject().put("operation", op.id).put("fixed_units", -op.distance.units).put("requested_units", op.distance.units).put("requested_cm", op.distance.centimetersText).put("outcome", outcome)
             .put("movement_sent", op.movementSent).put("time_ms", System.currentTimeMillis())
         val rows = JSONArray()
         proof?.let { result -> json.put("native_pid", result.nativePid); result.matchedPrinterRows.forEach(rows::put) }
@@ -211,7 +212,7 @@ class ReflectivePaperMotion(
         catch (failure: Throwable) { file.failWrite(out); throw failure }
     }
 
-    private class Operation(val caller: Job?) {
+    private class Operation(val caller: Job?, val distance: RetractionDistance) {
         val id = UUID.randomUUID().toString()
         @Volatile var timedOut = false
         var movementSent = false

@@ -21,6 +21,7 @@ public final class PaperAuditFixtures {
             List<String> missing=new ArrayList<>(before);missing.remove(2);reject(()->NativeLogAudit.auditPre(missing,MARKER,APP,pre));
             List<String> wrongAck=new ArrayList<>(lines);wrongAck.set(6,row(T+105,999,"POS_AT","[SP_0] AT< 06"));reject(()->NativeLogAudit.audit(wrongAck,MARKER,APP,pre,feed,post));
             List<String> duplicate=new ArrayList<>(lines);duplicate.add(6,row(T+104,NATIVE,"POS_AT","[SP_0] AT> "+feed.txHex));reject(()->NativeLogAudit.audit(duplicate,MARKER,APP,pre,feed,post));
+            List<String> wrongDistance=new ArrayList<>(lines);wrongDistance.set(5,row(T+103,NATIVE,"POS_AT","[SP_0] AT> "+hex(PaperProtocol.retractRequest(2,80))));reject(()->NativeLogAudit.audit(wrongDistance,MARKER,APP,pre,feed,post));
             List<String> noFeedAck=new ArrayList<>(lines);noFeedAck.remove(6);reject(()->NativeLogAudit.audit(noFeedAck,MARKER,APP,pre,feed,post));
             List<String> otherPrint=new ArrayList<>(lines);otherPrint.add(5,row(T+90,NATIVE,"POS_AT","[SP_0] AT> "+hex(frame(8,0x32,new byte[0]))));reject(()->NativeLogAudit.audit(otherPrint,MARKER,APP,pre,feed,post));
             List<String> badEnd=new ArrayList<>(lines);badEnd.remove(badEnd.size()-1);reject(()->NativeLogAudit.audit(badEnd,MARKER,APP,pre,feed,post));
@@ -38,7 +39,7 @@ public final class PaperAuditFixtures {
     }
     private static List<String> fixture(){
         pre=new NativeLogAudit.Transaction(hex(PaperProtocol.statusRequest(1)),hex(response(1,0x30,status())),T,T+20);
-        feed=new NativeLogAudit.Transaction(hex(PaperProtocol.retractRequest(2)),hex(response(2,0x33,new byte[0])),T+100,T+125);
+        feed=new NativeLogAudit.Transaction(hex(PaperProtocol.retractRequest(2, 120)),hex(response(2,0x33,new byte[0])),T+100,T+125);
         post=new NativeLogAudit.Transaction(hex(PaperProtocol.statusRequest(3)),hex(response(3,0x30,status())),T+200,T+225);
         return new ArrayList<>(Arrays.asList(row(T-10,APP,"SpoolPaperMotion","BEGIN "+MARKER),
             row(T+3,NATIVE,"POS_AT","[SP_0] AT> "+pre.txHex),row(T+4,NATIVE,"POS_AT","[SP_0] AT< 06"),row(T+15,NATIVE,"POS_AT","[SP_0] AT< "+pre.rxHex),

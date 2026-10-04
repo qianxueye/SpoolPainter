@@ -14,6 +14,7 @@ class ReceiptRetractionControlTest {
         val preference = ReceiptRetractionPreference({ false }, { writes++ })
         assertFalse(preference.state.value)
         assertFalse(receipt.retractBeforePrint)
+        assertEquals(120, receipt.retractUnits)
         assertFalse(receipt.capturePaperOptions().retractBeforePrint)
         assertEquals(0, writes)
     }
@@ -33,10 +34,11 @@ class ReceiptRetractionControlTest {
     }
 
     @Test fun fixedLabelsCannotImportReceiptReversePreference() {
-        val fixed = receipt.copy(paper = PaperTemplate())
+        val fixed = receipt.copy(paper = PaperTemplate(), retractUnits = 160)
         val captured = fixed.capturePaperOptions()
         assertNotNull(captured.paper)
         assertFalse(captured.retractBeforePrint)
+        assertEquals(160, captured.retractUnits)
         assertEquals(PaperTemplate(), captured.paper)
         try { fixed.copy(retractBeforePrint = true); fail("fixed label reverse request accepted") } catch (_: IllegalArgumentException) { }
     }

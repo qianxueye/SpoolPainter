@@ -97,7 +97,7 @@ class PrinterController(
         port.prepare(job.request)
         if (job.request.retractBeforePrint) {
             mutableState.value = PrintState.Working(id, "正在回抽纸张并核验结果…")
-            paperMotion.retractBeforePrint()
+            paperMotion.retractBeforePrint(job.request.retractUnits)
         }
         val done = CompletableDeferred<Completion>()
         val listener = object : PrinterPort.Listener {

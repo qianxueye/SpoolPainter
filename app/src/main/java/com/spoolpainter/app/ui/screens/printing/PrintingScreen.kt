@@ -5,6 +5,8 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChipDefaults
@@ -14,6 +16,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Column
@@ -22,6 +25,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Switch
@@ -49,6 +53,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.spoolpainter.app.hardware.paper.RetractionDistance
 import com.spoolpainter.app.hardware.printer.LabelQrMode
 import com.spoolpainter.app.hardware.printer.PaperTail
 import com.spoolpainter.app.hardware.printer.PrintRequest
@@ -82,6 +87,7 @@ fun PrintingScreen(
     val pending by viewModel.pending.collectAsStateWithLifecycle()
     val tail by viewModel.tail.collectAsStateWithLifecycle()
     val retractBeforePrint by viewModel.retractBeforePrint.collectAsStateWithLifecycle()
+    val retractUnits by viewModel.retractUnits.collectAsStateWithLifecycle()
     val templates by viewModel.templates.collectAsStateWithLifecycle()
     val preparation by viewModel.preparation.collectAsStateWithLifecycle()
     val busy = pending > 0 || preparation == PrintPreparationState.Loading
@@ -97,9 +103,10 @@ fun PrintingScreen(
     var deletingProfile by remember { mutableStateOf<PaperTemplateProfile?>(null) }
     var templateError by remember { mutableStateOf<String?>(null) }
     var printControlError by remember { mutableStateOf<String?>(null) }
+    var distanceDialogOpen by remember { mutableStateOf(false) }
     val retractionUnavailableReason = viewModel.retractionUnavailableReason()
     val selected = request?.copy(qrMode = mode, paper = templates.selected?.paper,
-        retractBeforePrint = templates.selected == null && retractBeforePrint)
+        retractBeforePrint = templates.selected == null && retractBeforePrint, retractUnits = retractUnits)
     val retractionReady = selected?.retractBeforePrint != true || retractionUnavailableReason == null
     val quarantined = state is PrintState.Uncertain
     val prepared = preparation as? PrintPreparationState.Ready
@@ -172,12 +179,22 @@ fun PrintingScreen(
             Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)) {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Text("打印前回抽 1 cm", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
-                        Switch(modifier = Modifier.semantics { contentDescription = "打印前回抽 1 厘米，连续小票纸实验功能" }, checked = retractBeforePrint, onCheckedChange = viewModel::setRetractBeforePrint,
+                        Text("打印前回抽", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
+                        Switch(modifier = Modifier.semantics { contentDescription = "打印前回抽，当前设置 ${RetractionDistance(retractUnits).centimetersText} 厘米，连续小票纸实验功能" }, checked = retractBeforePrint, onCheckedChange = viewModel::setRetractBeforePrint,
                             enabled = !busy && !quarantined && (retractBeforePrint || retractionUnavailableReason == null))
                     }
                     Text("实验功能，仅用于连续小票纸；标签纸不回抽。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    if (retractBeforePrint) Text("请确保连续小票纸可自由移动，纸路无阻挡。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (retractBeforePrint) {
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            listOf(40, 80, 120, 160).forEach { units ->
+                                FilterChip(selected = retractUnits == units, onClick = { viewModel.setRetractUnits(units) }, enabled = !busy && !quarantined,
+                                    label = { Text("${RetractionDistance(units).centimetersText} cm") }, colors = printChipColors())
+                            }
+                            AssistChip(onClick = { distanceDialogOpen = true }, enabled = !busy && !quarantined,
+                                label = { Text(if (retractUnits in setOf(40, 80, 120, 160)) "自定义" else "自定义 ${RetractionDistance(retractUnits).centimetersText} cm") })
+                        }
+                        Text("请确保连续小票纸可自由移动，纸路无阻挡。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                     retractionUnavailableReason?.let { Text("回抽不可用：$it。可关闭回抽，按原方式打印。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                 }
             }
@@ -214,6 +231,11 @@ fun PrintingScreen(
             modifier = Modifier.fillMaxWidth(),
         ) { Text(if (quarantined) "结果未知，打印已暂停" else if (preparationFailure != null) "重新读取并打印" else if (state is PrintState.Failed) "检查纸张后重新打印" else "读取最新信息并打印") }
     }
+    if (distanceDialogOpen) RetractionDistanceDialog(
+        initialUnits = retractUnits,
+        onClose = { distanceDialogOpen = false },
+        onSave = viewModel::setRetractUnits,
+    )
     if (editorOpen) PaperTemplateEditor(
         profile = editingProfile,
         onClose = { editorOpen = false },
@@ -239,3 +261,27 @@ private fun printChipColors() = FilterChipDefaults.filterChipColors(
     selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
     selectedLeadingIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
 )
+
+@Composable
+private fun RetractionDistanceDialog(initialUnits: Int, onClose: () -> Unit, onSave: (Int) -> Unit) {
+    var text by remember(initialUnits) { mutableStateOf(RetractionDistance(initialUnits).centimetersText) }
+    var error by remember { mutableStateOf<String?>(null) }
+    AlertDialog(
+        onDismissRequest = onClose,
+        title = { Text("自定义回抽距离") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("0.1–3.0 cm，以 0.1 cm 为单位。保存只更改设置，不会走纸。", style = MaterialTheme.typography.bodySmall)
+                OutlinedTextField(value = text, onValueChange = { text = it; error = null }, label = { Text("回抽距离（cm）") }, singleLine = true,
+                    modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), isError = error != null,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
+                error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+            }
+        },
+        confirmButton = { TextButton(onClick = {
+            try { onSave(RetractionDistance.fromCentimeters(text).units); onClose() }
+            catch (e: Exception) { error = e.message ?: "距离无效，请填写 0.1–3.0 cm" }
+        }) { Text("保存") } },
+        dismissButton = { TextButton(onClick = onClose) { Text("取消") } },
+    )
+}

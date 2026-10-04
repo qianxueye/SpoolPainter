@@ -88,7 +88,7 @@ class PrinterControllerTest {
     @Test fun unresolvedPersistedMotionBlocksEvenANormalReceiptBeforeOpen() = runTest {
         val port = FakePort()
         val controller = PrinterController(port, backgroundScope, paperMotion = object : PaperMotion {
-            override suspend fun retractBeforePrint() = Unit
+            override suspend fun retractBeforePrint(units: Int) = Unit
             override fun checkNoPending() { throw MotionUnknown("存在未确认回抽") }
         })
         controller.enqueue(request(), PaperTail.ONE_CM)
@@ -112,10 +112,27 @@ class PrinterControllerTest {
         runCurrent()
     }
 
+    @Test fun eachQueuedJobCapturesItsOwnDistance() = runTest {
+        val port = FakePort()
+        val distances = mutableListOf<Int>()
+        val controller = PrinterController(port, backgroundScope, paperMotion = PaperMotion { units -> distances += units })
+        controller.enqueue(request(1).copy(retractBeforePrint = true, retractUnits = 40), PaperTail.ONE_CM)
+        controller.enqueue(request(2).copy(retractBeforePrint = true, retractUnits = 120), PaperTail.ONE_CM)
+        controller.enqueue(request(3).copy(retractBeforePrint = false, retractUnits = 240), PaperTail.ONE_CM)
+        runCurrent()
+        for (index in 0..2) {
+            port.callbacks[index].onFinish()
+            runCurrent()
+        }
+        assertEquals(listOf(40, 120), distances)
+        assertEquals(listOf(40, 120, 240), port.requests.map { it.retractUnits })
+    }
+
     @Test fun fixedLabelsCannotRequestCompensationAndDefaultIsOff() = runTest {
         val port = FakePort()
         val controller = PrinterController(port, backgroundScope)
         assertFalse(request().retractBeforePrint)
+        assertEquals(120, request().retractUnits)
         assertTrue(runCatching { request().copy(paper = PaperTemplate(), retractBeforePrint = true) }.exceptionOrNull() is IllegalArgumentException)
         runCurrent()
         assertEquals(0, port.opens)

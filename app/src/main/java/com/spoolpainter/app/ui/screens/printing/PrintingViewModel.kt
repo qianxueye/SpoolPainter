@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.spoolpainter.app.data.local.SettingsRepository
 import com.spoolpainter.app.data.remote.inventory.InventoryRepository
+import com.spoolpainter.app.hardware.paper.RetractionDistance
 import com.spoolpainter.app.hardware.paper.paperMotionUnavailableReason
 import com.spoolpainter.app.hardware.printer.PaperTemplate
 import com.spoolpainter.app.hardware.printer.PaperTail
@@ -30,6 +31,11 @@ class PrintingViewModel @Inject constructor(
         write = { preferences.edit().putBoolean("retract_before_print", it).apply() },
     )
     val retractBeforePrint = receiptRetractionPreference.state
+    private val retractionDistancePreference = RetractionDistancePreference(
+        read = { preferences.getInt("retract_units", RetractionDistance.DEFAULT_UNITS) },
+        write = { preferences.edit().putInt("retract_units", it).apply() },
+    )
+    val retractUnits = retractionDistancePreference.state
     private val mutableTail = MutableStateFlow(PaperTail.fromDots(preferences.getInt("tail_dots", 120)))
     val tail = mutableTail.asStateFlow()
     private val templateStore = PaperTemplateStore(
@@ -61,12 +67,13 @@ class PrintingViewModel @Inject constructor(
         mutableTail.value = value
     }
     fun setRetractBeforePrint(value: Boolean) = receiptRetractionPreference.set(value)
+    fun setRetractUnits(value: Int) = retractionDistancePreference.set(value)
     fun retractionUnavailableReason(): String? = paperMotionUnavailableReason(appContext)
     fun selectTemplate(id: String?) = templateStore.select(id)
     fun saveTemplate(id: String?, paper: PaperTemplate) = templateStore.save(id, paper)
     fun deleteTemplate(id: String) = templateStore.delete(id)
 
-    // Capture field choices with the request; future profile edits cannot alter an active job.
+    // Capture template and receipt options; later setting edits cannot alter an active job.
     fun print(request: PrintRequest) = preparationWorker.start(
         request.capturePaperOptions(),
         mutableTail.value,
@@ -87,5 +94,16 @@ internal class ReceiptRetractionPreference(read: () -> Boolean, private val writ
     fun set(value: Boolean) {
         write(value)
         mutableState.value = value
+    }
+}
+
+/** Invalid or absent local distance never rewrites the saved switch, tail, or paper profiles. */
+internal class RetractionDistancePreference(read: () -> Int, private val write: (Int) -> Unit) {
+    private val mutableState = MutableStateFlow(runCatching { RetractionDistance(read()).units }.getOrDefault(RetractionDistance.DEFAULT_UNITS))
+    val state = mutableState.asStateFlow()
+    fun set(units: Int) {
+        val validated = RetractionDistance(units).units
+        write(validated)
+        mutableState.value = validated
     }
 }
