@@ -54,6 +54,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.spoolpainter.app.hardware.paper.RetractionDistance
+import com.spoolpainter.app.hardware.paper.RetractionCalibration
 import com.spoolpainter.app.hardware.printer.LabelQrMode
 import com.spoolpainter.app.hardware.printer.PaperTail
 import com.spoolpainter.app.hardware.printer.PrintRequest
@@ -88,6 +89,7 @@ fun PrintingScreen(
     val tail by viewModel.tail.collectAsStateWithLifecycle()
     val retractBeforePrint by viewModel.retractBeforePrint.collectAsStateWithLifecycle()
     val retractUnits by viewModel.retractUnits.collectAsStateWithLifecycle()
+    val calibrationPercent by viewModel.retractCalibrationPercent.collectAsStateWithLifecycle()
     val templates by viewModel.templates.collectAsStateWithLifecycle()
     val preparation by viewModel.preparation.collectAsStateWithLifecycle()
     val busy = pending > 0 || preparation == PrintPreparationState.Loading
@@ -104,9 +106,10 @@ fun PrintingScreen(
     var templateError by remember { mutableStateOf<String?>(null) }
     var printControlError by remember { mutableStateOf<String?>(null) }
     var distanceDialogOpen by remember { mutableStateOf(false) }
+    var calibrationDialogOpen by remember { mutableStateOf(false) }
     val retractionUnavailableReason = viewModel.retractionUnavailableReason()
     val selected = request?.copy(qrMode = mode, paper = templates.selected?.paper,
-        retractBeforePrint = templates.selected == null && retractBeforePrint, retractUnits = retractUnits)
+        retractBeforePrint = templates.selected == null && retractBeforePrint, retractUnits = retractUnits, retractCalibrationPercent = calibrationPercent)
     val retractionReady = selected?.retractBeforePrint != true || retractionUnavailableReason == null
     val quarantined = state is PrintState.Uncertain
     val prepared = preparation as? PrintPreparationState.Ready
@@ -194,6 +197,8 @@ fun PrintingScreen(
                                 label = { Text(if (retractUnits in setOf(40, 80, 120, 160)) "自定义" else "自定义 ${RetractionDistance(retractUnits).centimetersText} cm") })
                         }
                         Text("请确保连续小票纸可自由移动，纸路无阻挡。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        AssistChip(onClick = { calibrationDialogOpen = true }, enabled = !busy && !quarantined,
+                            label = { Text("回抽校准 ${RetractionCalibration(calibrationPercent).text} 倍") })
                     }
                     retractionUnavailableReason?.let { Text("回抽不可用：$it。可关闭回抽，按原方式打印。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                 }
@@ -236,6 +241,7 @@ fun PrintingScreen(
         onClose = { distanceDialogOpen = false },
         onSave = viewModel::setRetractUnits,
     )
+    if (calibrationDialogOpen) RetractionCalibrationDialog(calibrationPercent, { calibrationDialogOpen = false }, viewModel::setRetractionCalibration)
     if (editorOpen) PaperTemplateEditor(
         profile = editingProfile,
         onClose = { editorOpen = false },
@@ -284,4 +290,21 @@ private fun RetractionDistanceDialog(initialUnits: Int, onClose: () -> Unit, onS
         }) { Text("保存") } },
         dismissButton = { TextButton(onClick = onClose) { Text("取消") } },
     )
+}
+
+@Composable
+private fun RetractionCalibrationDialog(initialPercent: Int, onClose: () -> Unit, onSave: (Int) -> Unit) {
+    var text by remember(initialPercent) { mutableStateOf(RetractionCalibration(initialPercent).text) }
+    var error by remember { mutableStateOf<String?>(null) }
+    AlertDialog(onDismissRequest = onClose, title = { Text("回抽长度校准") }, text = {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("默认 2.00 倍，根据本机“原设置 2 cm 约退 1 cm”的反馈校正。若仍偏短可调大，偏长可调小。保存不会走纸。", style = MaterialTheme.typography.bodySmall)
+            OutlinedTextField(value = text, onValueChange = { text = it; error = null }, label = { Text("校准倍率（0.50–3.00）") },
+                singleLine = true, isError = error != null, modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
+            error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        }
+    }, confirmButton = { TextButton(onClick = {
+        try { onSave(RetractionCalibration.parse(text).percent); onClose() }
+        catch (e: Exception) { error = e.message ?: "校准倍率无效" }
+    }) { Text("保存") } }, dismissButton = { TextButton(onClick = onClose) { Text("取消") } })
 }

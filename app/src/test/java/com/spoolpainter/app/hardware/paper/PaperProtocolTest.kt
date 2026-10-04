@@ -6,15 +6,15 @@ import java.nio.ByteBuffer
 import java.util.TimeZone
 
 class PaperProtocolTest {
-    @Test fun defaultDistanceEncodesOnePointFiveCentimetersAsNegative120() {
+    @Test fun correctedDefaultDistanceEncodesOnePointFiveCentimetersAsNegative240() {
         assertEquals(120, RetractionDistance.DEFAULT_UNITS)
-        assertEquals("02000802334504FFFFFF88030C", PaperProtocol.retractRequest(2, RetractionDistance.DEFAULT_UNITS).hex())
+        assertEquals("02000802334504FFFFFF100394", PaperProtocol.retractRequest(2, RetractionMotionRequest(RetractionDistance()).rawUnits).hex())
         PaperProtocol.requireWhitelistedRequest(PaperProtocol.statusRequest(1))
         assertTrue(runCatching { PaperProtocol.successData(byteArrayOf(6), 2, 0x33) }.isFailure)
     }
 
     @Test fun allSupportedStepsHaveCorrectSignedPayloadAndChecksum() {
-        for (units in 8..240 step 8) {
+        for (units in 2..720 step 2) {
             val packet = PaperProtocol.retractRequest(2, units)
             assertEquals(-units, ByteBuffer.wrap(packet, 7, 4).int)
             assertEquals(packet.last().toInt() and 255, packet.drop(1).dropLast(1).fold(0) { xor, byte -> xor xor (byte.toInt() and 255) })
@@ -26,10 +26,10 @@ class PaperProtocolTest {
     }
 
     @Test fun invalidValuesAndMalformedPacketsNeverReachTheWhitelist() {
-        for (units in listOf(Int.MIN_VALUE, -120, 0, 1, 7, 9, 239, 241, 248, Int.MAX_VALUE)) {
+        for (units in listOf(Int.MIN_VALUE, -120, 0, 1, 7, 9, 239, 241, 721, 722, Int.MAX_VALUE)) {
             assertTrue("must reject $units", runCatching { PaperProtocol.retractRequest(2, units) }.isFailure)
         }
-        for (signed in listOf(Int.MIN_VALUE, -248, -9, 0, 8, 40, 240, Int.MAX_VALUE)) {
+        for (signed in listOf(Int.MIN_VALUE, -722, -9, 0, 8, 40, 240, Int.MAX_VALUE)) {
             val packet = PaperProtocol.retractRequest(2, 120)
             ByteBuffer.wrap(packet, 7, 4).putInt(signed)
             checksum(packet)

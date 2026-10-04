@@ -1,6 +1,7 @@
 package com.spoolpainter.app.hardware.printer
 
 import com.spoolpainter.app.hardware.paper.RetractionDistance
+import com.spoolpainter.app.hardware.paper.RetractionCalibration
 import java.net.URI
 import java.util.Locale
 
@@ -32,11 +33,13 @@ data class PrintRequest(
     val paper: PaperTemplate? = null,
     val retractBeforePrint: Boolean = false,
     val retractUnits: Int = RetractionDistance.DEFAULT_UNITS,
+    val retractCalibrationPercent: Int = RetractionCalibration.DEFAULT_PERCENT,
 ) {
     init { validatePrintOptions() }
 
     fun validatePrintOptions() {
         RetractionDistance(retractUnits)
+        RetractionCalibration(retractCalibrationPercent)
         require(!retractBeforePrint || paper == null) { "打印前回抽仅支持连续小票，不能用于定长标签" }
     }
 

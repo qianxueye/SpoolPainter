@@ -57,9 +57,9 @@ Fixed-gap feed uses the existing manager-owned private `printer` field and its p
 
 `PrintRequest.retractBeforePrint` defaults to false and is valid only when `paper == null`. The UI owns a persisted, default-off experimental receipt preference; each job captures its own value. Fixed labels hide the option and the controller rejects an inconsistent request. The accepted UI uses unobstructed continuous-paper wording rather than a per-print acknowledgement gate.
 
-For an enabled receipt the adapter fully measures, wraps and renders its text and local QR codes into a single bitmap during `prepare`. A rendering or fit error therefore precedes any movement. The controller then awaits `PaperMotion.retractBeforePrint(request.retractUnits)` before calling `beginPrint`; no raster/heat request is issued by the compensation helper. The native manager is opened/prepared first so its normal initialization parameter traffic completes before the compensation log window. Legacy receipts with the option off retain their existing SDK layout path.
+For an enabled receipt the adapter fully measures, wraps and renders its text and local QR codes into a single bitmap during `prepare`. A rendering or fit error therefore precedes any movement. The controller then awaits `PaperMotion.retractBeforePrint(RetractionMotionRequest(...))` before calling `beginPrint`; no raster/heat request is issued by the compensation helper. The native manager is opened/prepared first so its normal initialization parameter traffic completes before the compensation log window. Legacy receipts with the option off retain their existing SDK layout path.
 
-`ReflectivePaperMotion` reuses the confirmed demo protocol through reflection against the installed shared SDK, with no proprietary compile dependency or bundled vendor code. Its only raw commands are bare ordinary SP30 and one signed-negative SP33 carrying the captured requested distance (default 120 raw units, nominal 15 mm / 1.5 cm). It validates exact firmware, mode 0, permission/capability, service health, cached printer count, client state, paper and temperature. An injected `NfcRepository.withPosHardwarePaused` scope awaits disarm/cancellation cleanup and inhibits re-arming throughout capture, movement, post-cleanup, final proof and capture close, even when navigation changes or a caller bypasses the printing page.
+`ReflectivePaperMotion` reuses the confirmed demo protocol through reflection against the installed shared SDK, with no proprietary compile dependency or bundled vendor code. Its only raw commands are bare ordinary SP30 and one signed-negative SP33 carrying the captured requested distance (default requested 1.5 cm with a 2.00 calibration multiplier, yielding 240 raw units). It validates exact firmware, mode 0, permission/capability, service health, cached printer count, client state, paper and temperature. An injected `NfcRepository.withPosHardwarePaused` scope awaits disarm/cancellation cleanup and inhibits re-arming throughout capture, movement, post-cleanup, final proof and capture close, even when navigation changes or a caller bypasses the printing page.
 
 READ_LOGS must be granted through the device's development permission mechanism; missing permission is a readable known-unsent error. Log capture uses a two-second device-zone lookback and retains bounded rows only after its unique marker. Before SP33 it requires full native pre-status proof. After the movement it requires a correlated firmware response, ordinary post-status and complete native proof with exactly one source TX, its own ACK inside the response window, and one matching response. Marker/frame/length/LRC/source/time checks and unexpected printer-command rejection are retained.
 
@@ -71,8 +71,45 @@ The native provider can retransmit one raw request up to nine times on ACK timeo
 
 Controller tests cover preparation-before-motion-before-raster ordering, no motion on render failure, no raster after known-unsent or unknown motion failure, persistent-uncertainty rejection, per-job option capture, default-off and fixed-label rejection. Reused pure protocol/native-audit fixtures remain offline; no test sends device commands.
 
-The current default compensation is the owner's requested 1.5 cm, configurable from 0.1 to 3.0 cm in 0.1 cm steps. `RetractionDistance` validates positive raw units 8–240 in multiples of eight, formats exact one-decimal centimeter text, and parses dot-decimal input without floating-point rounding or silent clamping. These are application sizing assumptions, not measured mechanical calibration. `PrintRequest.retractUnits` defaults to 120 and is constructor-validated even when the separate default-off switch is disabled. Each queued job and each motion operation captures an immutable distance; editing the next setting cannot alter an in-flight request.
+The current default compensation is the owner's requested 1.5 cm, configurable from 0.1 to 3.0 cm in 0.1 cm steps. `RetractionDistance` retains the legacy UI amount encoding 8–240 in multiples of eight; this is not a raw motor counter. `RetractionCalibration` independently maps the requested distance to raw motor counts. It, formats exact one-decimal centimeter text, and parses dot-decimal input without floating-point rounding or silent clamping. These are application sizing assumptions, not measured mechanical calibration. `PrintRequest.retractUnits` defaults to 120 and is constructor-validated even when the separate default-off switch is disabled. Each queued job and each motion operation captures an immutable distance; editing the next setting cannot alter an in-flight request.
 
-`PaperProtocol.retractRequest(sequence, units)` accepts only that validated positive magnitude, encodes its signed-negative big-endian value in TLV45, and sends one command. Its whitelist re-derives and exactly compares the frame, rejecting positive/zero counts, INT_MIN, out-of-range/non-step counts, malformed framing and bad checksums. The valid former 40/80-unit sizes remain selectable. The default -120 payload is `FF FF FF 88`; sequence 2 produces `02 00 08 02 33 45 04 FF FF FF 88 03 0C`. Audit metadata captures signed `fixed_units` for that individual request, positive `requested_units` and exact `requested_cm`. The native audit still requires exactly one matching requested TX/ACK/response rather than assuming a hardcoded distance.
+`PaperProtocol.retractRequest(sequence, units)` accepts only that validated positive magnitude, encodes its signed-negative big-endian value in TLV45, and sends one command. Its whitelist re-derives and exactly compares the frame, rejecting positive/zero counts, INT_MIN, out-of-range/non-step counts, malformed framing and bad checksums. The valid former 40/80-unit sizes remain selectable. The requested default remains 1.5 cm, but at the default 2.00 correction the -240 payload is `FF FF FF 10`; sequence 2 produces `02 00 08 02 33 45 04 FF FF FF 10 03 94`. Audit metadata captures signed `fixed_units` for that individual request, positive `requested_units` and exact `requested_cm`. The native audit still requires exactly one matching requested TX/ACK/response rather than assuming a hardcoded distance.
 
 Default-off, receipt-only checks, hardware exclusion, one-second response evidence gate, quarantine and post-print tail settings are unchanged. No new paper-length/operator gate is added. The standalone demo's +40 forward operation is unchanged.
+
+
+## Device-local reverse calibration correction
+
+The calibration fix depends on the unmerged POS integration at commit 41e1d8d
+(PR 1). Its separate PR uses `codex/kozen-pos-spoolman` as its explicit base;
+merge the POS integration first, then this fix. Acceptance requires preserved
+saved centimeter choices and tail/switch/template settings, exact bounded packet
+encoding, immutable queued calibration, and a physical ruler check on the terminal.
+Do not mark physical calibration exact from a transport-success reply alone.
+
+The owner observed that the old 2 cm setting moved approximately 1 cm. The old
+conversion incorrectly treated an unmeasured feed counter as equivalent to raster
+DPI. This patch adds a separate default 2.00 multiplier, configurable from 0.50 to
+3.00 in 0.01 steps, without altering raster layout or the selected post-print tail.
+The existing `retract_units` key remains a legacy UI amount (80 per requested cm),
+so an old saved 120 still displays 1.5 cm. The independent
+`retract_calibration_percent` key defaults to 200; invalid values fall back without
+rewriting other preferences. Requested distance and calibration are captured
+before fetching, queueing or dispatch.
+
+`RetractionMotionRequest` computes raw counts with exact integer rounding to the
+nearest two-count full electrical cycle in the verified mode 0. The raw whitelist
+accepts only even magnitudes 2–720, negative feed packets and bare status packets.
+Default settings now request -160/-240/-320 for 1.0/1.5/2.0 cm. The single movement
+request, native proof, hardware exclusion and uncertainty quarantine are unchanged.
+Audit records distinguish requested centimeters, legacy UI amount, calibration
+percent and transmitted raw counts. Existing historical records are not rewritten.
+
+The default multiplier is an approximate correction from the owner's observation,
+not a manufacturer specification or a proven linear calibration. At maximum
+settings, native retries may repeat 720 counts up to nine times (6480 counts); this
+is not a guarantee of physical distance. If larger requested values still produce
+similar physical displacement after this correction, investigate nonlinearity,
+lost steps or paper-path slip rather than continually increasing the multiplier.
+The separate stop-time diagnostic did not demonstrate improved physical movement;
+no 100 ms stop wait was added to production.

@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.spoolpainter.app.data.local.SettingsRepository
 import com.spoolpainter.app.data.remote.inventory.InventoryRepository
 import com.spoolpainter.app.hardware.paper.RetractionDistance
+import com.spoolpainter.app.hardware.paper.RetractionCalibration
 import com.spoolpainter.app.hardware.paper.paperMotionUnavailableReason
 import com.spoolpainter.app.hardware.printer.PaperTemplate
 import com.spoolpainter.app.hardware.printer.PaperTail
@@ -36,6 +37,11 @@ class PrintingViewModel @Inject constructor(
         write = { preferences.edit().putInt("retract_units", it).apply() },
     )
     val retractUnits = retractionDistancePreference.state
+    private val calibrationPreference = RetractionCalibrationPreference(
+        read = { preferences.getInt("retract_calibration_percent", RetractionCalibration.DEFAULT_PERCENT) },
+        write = { preferences.edit().putInt("retract_calibration_percent", it).apply() },
+    )
+    val retractCalibrationPercent = calibrationPreference.state
     private val mutableTail = MutableStateFlow(PaperTail.fromDots(preferences.getInt("tail_dots", 120)))
     val tail = mutableTail.asStateFlow()
     private val templateStore = PaperTemplateStore(
@@ -68,6 +74,7 @@ class PrintingViewModel @Inject constructor(
     }
     fun setRetractBeforePrint(value: Boolean) = receiptRetractionPreference.set(value)
     fun setRetractUnits(value: Int) = retractionDistancePreference.set(value)
+    fun setRetractionCalibration(value: Int) = calibrationPreference.set(value)
     fun retractionUnavailableReason(): String? = paperMotionUnavailableReason(appContext)
     fun selectTemplate(id: String?) = templateStore.select(id)
     fun saveTemplate(id: String?, paper: PaperTemplate) = templateStore.save(id, paper)
@@ -103,6 +110,16 @@ internal class RetractionDistancePreference(read: () -> Int, private val write: 
     val state = mutableState.asStateFlow()
     fun set(units: Int) {
         val validated = RetractionDistance(units).units
+        write(validated)
+        mutableState.value = validated
+    }
+}
+
+internal class RetractionCalibrationPreference(read: () -> Int, private val write: (Int) -> Unit) {
+    private val mutableState = MutableStateFlow(runCatching { RetractionCalibration(read()).percent }.getOrDefault(RetractionCalibration.DEFAULT_PERCENT))
+    val state = mutableState.asStateFlow()
+    fun set(percent: Int) {
+        val validated = RetractionCalibration(percent).percent
         write(validated)
         mutableState.value = validated
     }
