@@ -124,7 +124,7 @@ class MainActivity : ComponentActivity() {
                                         val id = spool.id
                                         if (id != null && id > 0) {
                                             printRequest = PrintRequest(
-                                                SpoolLabel(id, spool.filament.vendor?.name.orEmpty(), spool.filament.material.orEmpty(), spool.filament.color_hex.orEmpty(), spool.remaining_weight?.toDouble(), spool.location.orEmpty()),
+                                                SpoolLabel(id, spool.filament.vendor?.name.orEmpty(), spool.filament.material.orEmpty(), spool.filament.color_hex.orEmpty(), spool.remaining_weight?.toDouble(), spool.location.orEmpty(), name = spool.filament.name.orEmpty()),
                                                 sourceUrl,
                                             )
                                             navigate("printing")

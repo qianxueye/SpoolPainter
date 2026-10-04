@@ -11,7 +11,7 @@ The Android POS label flow uses the installed `com.pos.sdk` shared library by re
 - `PrintingViewModel` also injects `InventoryRepository` and `SettingsRepository`. Each print action verifies the selected server against persisted settings, reads the selected spool again, checks the server a second time, validates the returned ID and filament object, and builds the final label from the fresh response. The refreshed label replaces the preview after submission; QR mode and the selected paper tail are preserved. Loading is set synchronously to reject duplicate taps. Fetch/validation failures never enqueue or automatically retry; leaving the ViewModel cancels preparation.
 - No physical printing occurs on entering the screen. Only the explicit print button enqueues a job. Printing never writes inventory or NFC data.
 
-The screen previews all printed text and the actual locally encoded QR image. The default QR links to `<configured base path>/spool/show/<id>`. The supplied backend redirects that path to its selected-spool UI. Optional `WEB+SPOOLMAN:S-<id>` is a separate QR payload; choosing both prints both QRs, not a concatenation.
+The screen previews all printed text and the actual locally encoded QR image. Product name (`filament.name`, e.g. PETG Pro) and material type (`filament.material`, e.g. PETG) are separate label lines; both the initial preview and fresh pre-print read preserve the full product name. A missing name falls back to material. The default QR links to `<configured base path>/spool/show/<id>`. The supplied backend redirects that path to its selected-spool UI. Optional `WEB+SPOOLMAN:S-<id>` is a separate QR payload; choosing both prints both QRs, not a concatenation.
 
 ## SDK methods and constants
 

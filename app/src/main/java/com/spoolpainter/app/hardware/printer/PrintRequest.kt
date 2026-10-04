@@ -10,6 +10,7 @@ data class SpoolLabel(
     val color: String,
     val remainingGrams: Double?,
     val location: String,
+    val name: String = "",
 )
 
 enum class LabelQrMode(val title: String) {
@@ -49,6 +50,7 @@ data class PrintRequest(
     fun textLines(): List<String> = listOf(
         "耗材 #${label.id}",
         "品牌：${label.vendor.ifBlank { "未设置" }}",
+        "名称：${label.name.ifBlank { label.material.ifBlank { "未设置" } }}",
         "材料：${label.material.ifBlank { "未设置" }}",
         "颜色：${label.color.ifBlank { "未设置" }}",
         "剩余：" + (label.remainingGrams?.takeIf { it.isFinite() }?.let { String.format(Locale.CHINA, "%.1f g", it) } ?: "未知"),

@@ -55,6 +55,7 @@ class PrintPreparation(
                         color = filament.text("color_hex").ifBlank { filament.text("multi_color_hexes") },
                         remainingGrams = spool.number("remaining_weight"),
                         location = spool.text("location"),
+                        name = filament.text("name"),
                     ),
                     serverUrl = expectedUrl,
                 )

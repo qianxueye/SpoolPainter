@@ -19,7 +19,7 @@ class PrintPreparationTest {
     private val request = PrintRequest(SpoolLabel(123, "Old", "PLA", "000000", 999.0, "Old shelf"), "https://example.org/base/", LabelQrMode.BOTH)
     private fun fixture(): JsonObject = JsonParser.parseString("""{
         "id":123,"remaining_weight":123.5,"location":"Fresh shelf",
-        "filament":{"material":"PETG","color_hex":"FFFFFF","vendor":{"name":"Fresh vendor"}}
+        "filament":{"name":"PETG Pro","material":"PETG","color_hex":"FFFFFF","vendor":{"name":"Fresh vendor"}}
     }""").asJsonObject
 
     @Test fun fetchesFreshFieldsAndPreservesQrModeBeforeEnqueue() = runTest {
@@ -32,7 +32,7 @@ class PrintPreparationTest {
         assertEquals(PrintPreparationState.Loading, worker.state.value)
         runCurrent()
         assertEquals(1, reads)
-        assertEquals(SpoolLabel(123, "Fresh vendor", "PETG", "FFFFFF", 123.5, "Fresh shelf"), submitted.single().label)
+        assertEquals(SpoolLabel(123, "Fresh vendor", "PETG", "FFFFFF", 123.5, "Fresh shelf", name = "PETG Pro"), submitted.single().label)
         assertEquals(LabelQrMode.BOTH, submitted.single().qrMode)
         assertEquals("https://example.org/base", submitted.single().serverUrl)
         assertEquals(PrintPreparationState.Ready(request, submitted.single()), worker.state.value)
