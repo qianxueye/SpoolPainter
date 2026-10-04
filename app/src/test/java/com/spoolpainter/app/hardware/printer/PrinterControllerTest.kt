@@ -132,6 +132,39 @@ class PrinterControllerTest {
         assertEquals(1, port.closes)
     }
 
+    @Test fun fixedLabelFeedsOnlyGapAndSnapshotsSelectedFields() = runTest {
+        val port = FakePort()
+        val controller = PrinterController(port, backgroundScope)
+        val fields = mutableSetOf(LabelField.ID, LabelField.NAME)
+        val value = request().copy(paper = PaperTemplate(gapMm = 2.0, selectedFields = fields))
+        assertTrue(controller.enqueue(value, PaperTail.TWO_AND_HALF_CM))
+        fields.clear()
+        runCurrent()
+        assertEquals(setOf(LabelField.ID, LabelField.NAME), port.requests.single().paper!!.selectedFields)
+        port.callbacks.single().onFinish()
+        runCurrent()
+        assertEquals(listOf(16), port.feeds)
+    }
+
+    @Test fun zeroFixedGapDoesNotSendFeedCommand() = runTest {
+        val port = FakePort()
+        val controller = PrinterController(port, backgroundScope)
+        controller.enqueue(request().copy(paper = PaperTemplate(gapMm = 0.0)), PaperTail.ONE_AND_HALF_CM)
+        runCurrent()
+        port.callbacks.single().onFinish()
+        runCurrent()
+        assertTrue(port.feeds.isEmpty())
+    }
+
+    @Test fun invalidPaperIsRejectedBeforeOpeningPrinter() = runTest {
+        val port = FakePort()
+        val controller = PrinterController(port, backgroundScope)
+        assertFalse(controller.enqueue(request().copy(paper = PaperTemplate(widthMm = 49.0)), PaperTail.ONE_CM))
+        runCurrent()
+        assertEquals(0, port.opens)
+        assertTrue(port.callbacks.isEmpty())
+    }
+
     @Test fun renderingFailureDoesNotKillWorker() = runTest {
         val port = FakePort().also { it.prepareFails = true }
         val controller = PrinterController(port, backgroundScope)

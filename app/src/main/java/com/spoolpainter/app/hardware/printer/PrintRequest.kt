@@ -28,6 +28,7 @@ data class PrintRequest(
     val label: SpoolLabel,
     val serverUrl: String,
     val qrMode: LabelQrMode = LabelQrMode.WEB,
+    val paper: PaperTemplate? = null,
 ) {
     fun webUrl(): String {
         require(label.id > 0) { "耗材编号无效" }
@@ -47,14 +48,25 @@ data class PrintRequest(
         }
     }
 
-    fun textLines(): List<String> = listOf(
-        "耗材 #${label.id}",
-        "品牌：${label.vendor.ifBlank { "未设置" }}",
-        "名称：${label.name.ifBlank { label.material.ifBlank { "未设置" } }}",
-        "材料：${label.material.ifBlank { "未设置" }}",
-        "颜色：${label.color.ifBlank { "未设置" }}",
-        "剩余：" + (label.remainingGrams?.takeIf { it.isFinite() }?.let { String.format(Locale.CHINA, "%.1f g", it) } ?: "未知"),
-        "位置：${label.location.ifBlank { "未设置" }}",
-        "服务器：${serverUrl.trim().trimEnd('/')}",
-    ).map { it.replace(Regex("[\\r\\n\\t]"), " ") }
+    fun textLines(): List<String> = LabelField.entries.filter { it != LabelField.QR }.map(::fieldText)
+
+    fun fieldText(field: LabelField): String = cleanText(when (field) {
+        LabelField.ID -> "耗材 #${label.id}"
+        LabelField.NAME -> "名称：${label.name.ifBlank { label.material.ifBlank { "未设置" } }}"
+        LabelField.VENDOR -> "品牌：${label.vendor.ifBlank { "未设置" }}"
+        LabelField.MATERIAL -> "材料：${label.material.ifBlank { "未设置" }}"
+        LabelField.COLOR -> "颜色：${label.color.ifBlank { "未设置" }}"
+        LabelField.REMAINING -> "剩余：" + (label.remainingGrams?.takeIf { it.isFinite() }?.let { String.format(Locale.CHINA, "%.1f g", it) } ?: "未知")
+        LabelField.LOCATION -> "位置：${label.location.ifBlank { "未设置" }}"
+        LabelField.SERVER -> "服务器：${serverUrl.trim().trimEnd('/')}"
+        LabelField.QR -> error("二维码使用图像布局")
+    })
+
+    /** Fixed stock advances only its configured gap, never the continuous-receipt tail. */
+    fun feedDots(receiptTail: PaperTail): Int {
+        paper?.validate()
+        return paper?.gapDots ?: receiptTail.dots
+    }
+
+    private fun cleanText(value: String) = value.replace('\r', ' ').replace('\n', ' ').replace('\t', ' ')
 }

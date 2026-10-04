@@ -51,11 +51,13 @@ class PrinterController(
 
     fun enqueue(request: PrintRequest, tail: PaperTail): Boolean {
         if (uncertain) return false
-        try { request.qrPayloads() }
+        // Snapshot the caller-owned set: later template edits cannot change queued work.
+        val captured = request.copy(paper = request.paper?.copy(selectedFields = request.paper.selectedFields.toSet()))
+        try { captured.qrPayloads(); captured.paper?.validate() }
         catch (e: IllegalArgumentException) { mutableState.value = PrintState.Failed(e.message ?: "标签无效"); return false }
         catch (e: java.net.URISyntaxException) { mutableState.value = PrintState.Failed("服务器地址格式无效"); return false }
         mutablePending.value += 1
-        if (jobs.trySend(Job(request, tail)).isFailure) { mutablePending.value -= 1; return false }
+        if (jobs.trySend(Job(captured, tail)).isFailure) { mutablePending.value -= 1; return false }
         return true
     }
 
@@ -105,7 +107,8 @@ class PrinterController(
         when (outcome) {
             Completion.Finished -> {
                 try {
-                    port.feed(job.tail.dots)
+                    val feedDots = job.request.feedDots(job.tail)
+                    if (feedDots > 0) port.feed(feedDots)
                     mutableState.value = PrintState.Finished(id)
                 } catch (e: Exception) {
                     mutableState.value = PrintState.Failed("内容已打印，纸尾走纸失败。请勿直接重印：${e.cause?.message ?: e.message}")

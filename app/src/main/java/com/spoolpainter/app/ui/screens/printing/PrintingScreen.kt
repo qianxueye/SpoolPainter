@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.OutlinedButton
@@ -47,6 +48,7 @@ import com.spoolpainter.app.hardware.printer.PaperTail
 import com.spoolpainter.app.hardware.printer.PrintRequest
 import com.spoolpainter.app.hardware.printer.PrintState
 import com.spoolpainter.app.hardware.printer.qrBitmap
+import com.spoolpainter.app.hardware.printer.renderLabelBitmap
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -72,6 +74,7 @@ fun PrintingScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val pending by viewModel.pending.collectAsStateWithLifecycle()
     val tail by viewModel.tail.collectAsStateWithLifecycle()
+    val templates by viewModel.templates.collectAsStateWithLifecycle()
     val preparation by viewModel.preparation.collectAsStateWithLifecycle()
     val busy = pending > 0 || preparation == PrintPreparationState.Loading
     val view = LocalView.current
@@ -81,16 +84,31 @@ fun PrintingScreen(
         onDispose { view.keepScreenOn = previous }
     }
     var mode by remember(request) { mutableStateOf(request?.qrMode ?: LabelQrMode.WEB) }
-    val selected = request?.copy(qrMode = mode)
+    var editorOpen by remember { mutableStateOf(false) }
+    var editingProfile by remember { mutableStateOf<PaperTemplateProfile?>(null) }
+    var deletingProfile by remember { mutableStateOf<PaperTemplateProfile?>(null) }
+    var templateError by remember { mutableStateOf<String?>(null) }
+    val selected = request?.copy(qrMode = mode, paper = templates.selected?.paper)
     val prepared = preparation as? PrintPreparationState.Ready
     val displayed = if (prepared?.original == selected) prepared?.fresh ?: selected else selected
-    val preview = remember(displayed) { runCatching { displayed?.qrPayloads()?.map { it to qrBitmap(it).asImageBitmap() }.orEmpty() } }
+    val receiptPreview = remember(displayed) { runCatching { displayed?.takeIf { it.paper == null }?.qrPayloads()?.map { it to qrBitmap(it).asImageBitmap() }.orEmpty() } }
+    val fixedPreview = remember(displayed) { runCatching { displayed?.takeIf { it.paper != null }?.let(::renderLabelBitmap) } }
+    val previewError = if (selected?.paper != null) fixedPreview.exceptionOrNull() else receiptPreview.exceptionOrNull()
+    val previewReady = selected != null && if (selected.paper != null) fixedPreview.getOrNull() != null else receiptPreview.isSuccess
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text("打印耗材标签", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
             TextButton(onClick = onBack) { Text("返回") }
         }
         OutlinedButton(onClick = onSelectSpool, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text(if (selected == null) "选择耗材" else "更换耗材") }
+        PaperTemplateSelector(
+            selection = templates, enabled = !busy,
+            onSelect = { id -> try { viewModel.selectTemplate(id); templateError = null } catch (e: Exception) { templateError = e.message } },
+            onAdd = { editingProfile = null; editorOpen = true },
+            onEdit = { editingProfile = templates.selected; editorOpen = true },
+            onDelete = { deletingProfile = templates.selected },
+        )
+        templateError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
         if (selected == null) {
             Text("请从库存选择一卷耗材，再预览和打印标签。")
         } else {
@@ -102,23 +120,35 @@ fun PrintingScreen(
             }
             Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh), elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("标签预览", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                    displayed!!.textLines().forEachIndexed { index, line -> Text(line, style = if (index == 0) MaterialTheme.typography.titleSmall else MaterialTheme.typography.bodyMedium, color = if (index == 0) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant) }
-                    preview.getOrNull()?.forEach { (payload, bitmap) ->
-                        Surface(color = Color.White, shape = RoundedCornerShape(12.dp), modifier = Modifier.align(Alignment.CenterHorizontally)) {
-                            Image(bitmap, contentDescription = "二维码：$payload", modifier = Modifier.padding(10.dp).size(180.dp))
+                    Text(if (selected.paper == null) "小票内容预览" else "标签实际排版预览", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    if (selected.paper != null) {
+                        fixedPreview.getOrNull()?.let { bitmap ->
+                            Surface(color = Color.White, shape = RoundedCornerShape(4.dp), modifier = Modifier.fillMaxWidth()) {
+                                Image(bitmap.asImageBitmap(), contentDescription = "当前纸张模板的实际标签排版", modifier = Modifier.fillMaxWidth())
+                            }
                         }
-                        Text(payload, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        Text("按尺寸走纸；首张标签请人工对齐。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    } else {
+                        displayed!!.textLines().forEachIndexed { index, line -> Text(line, style = if (index == 0) MaterialTheme.typography.titleSmall else MaterialTheme.typography.bodyMedium, color = if (index == 0) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant) }
+                        receiptPreview.getOrNull()?.forEach { (payload, bitmap) ->
+                            Surface(color = Color.White, shape = RoundedCornerShape(12.dp), modifier = Modifier.align(Alignment.CenterHorizontally)) {
+                                Image(bitmap, contentDescription = "二维码：$payload", modifier = Modifier.padding(10.dp).size(180.dp))
+                            }
+                            Text(payload, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        }
+                        Text("小票预览显示打印内容，实际字距与排版由打印机决定。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    preview.exceptionOrNull()?.let { Text(it.message ?: "无法生成二维码", color = MaterialTheme.colorScheme.error) }
+                    previewError?.let { Text("无法打印此模板：${it.message ?: "内容超出标签，请增大尺寸、减小字号或减少字段"}", color = MaterialTheme.colorScheme.error) }
                 }
             }
         }
-        Text("纸尾长度 · 自动保存", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
-        PaperTail.entries.chunked(2).forEach { options ->
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                options.forEach { option -> FilterChip(selected = tail == option, onClick = { viewModel.setTail(option) }, enabled = !busy, label = { Text(option.title) }, colors = printChipColors()) }
+        if (templates.selected == null) {
+            Text("纸尾长度 · 自动保存", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                PaperTail.entries.forEach { option -> FilterChip(selected = tail == option, onClick = { viewModel.setTail(option) }, enabled = !busy, label = { Text(option.title) }, colors = printChipColors()) }
             }
+        } else if (selected == null) {
+            Text("按尺寸走纸；首张标签请人工对齐。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         val preparationFailure = preparation as? PrintPreparationState.Failed
         val message = if (preparation == PrintPreparationState.Loading) "正在读取最新耗材信息…"
@@ -139,9 +169,26 @@ fun PrintingScreen(
         }
         Button(
             onClick = { selected?.let(viewModel::print) },
-            enabled = selected != null && preview.isSuccess && !busy,
+            enabled = previewReady && !busy,
             modifier = Modifier.fillMaxWidth(),
         ) { Text(if (preparationFailure != null) "重新读取并打印" else if (state is PrintState.Failed) "检查纸张后重新打印" else "读取最新信息并打印") }
+    }
+    if (editorOpen) PaperTemplateEditor(
+        profile = editingProfile,
+        onClose = { editorOpen = false },
+        onSave = viewModel::saveTemplate,
+    )
+    deletingProfile?.let { profile ->
+        AlertDialog(
+            onDismissRequest = { deletingProfile = null },
+            title = { Text("删除纸张模板？") },
+            text = { Text("删除“${profile.paper.name}”后将切换为小票纸。") },
+            confirmButton = { TextButton(onClick = {
+                try { viewModel.deleteTemplate(profile.id); templateError = null } catch (e: Exception) { templateError = e.message }
+                deletingProfile = null
+            }) { Text("删除") } },
+            dismissButton = { TextButton(onClick = { deletingProfile = null }) { Text("取消") } },
+        )
     }
 }
 

@@ -11,6 +11,7 @@ import java.lang.reflect.Proxy
 /** Reflection surface checked against the device's vendor-sdk.jar; no SDK is packaged. */
 class KozenPrinterPort(private val context: Context) : PrinterPort {
     private var manager: Any? = null
+    private var fixedLabelJob = false
     private val managerClass by lazy { Class.forName("com.pos.sdk.printer.POIPrinterManager") }
     private val lineClass by lazy { Class.forName("com.pos.sdk.printer.models.PrintLine") }
     private val textClass by lazy { Class.forName("com.pos.sdk.printer.models.TextPrintLine") }
@@ -35,8 +36,18 @@ class KozenPrinterPort(private val context: Context) : PrinterPort {
     override fun state(): Int = if (manager == null) 4 else managerClass.getMethod("getPrinterState").invoke(manager) as Int
 
     override fun prepare(request: PrintRequest) {
+        // Complete all measured validation before touching the vendor cache or dispatching paper.
+        val fixedBitmap = request.paper?.let { renderLabelBitmap(request) }
+        fixedLabelJob = fixedBitmap != null
         managerClass.getMethod("cleanCache").invoke(manager)
         val add = managerClass.getMethod("addPrintLine", lineClass)
+        if (fixedBitmap != null) {
+            // Verified PrinterLayout keeps a <=384px bitmap unchanged. cleanCache resets line
+            // and bottom spacing; this manager never calls addBlankView/setBottomSpace.
+            managerClass.getMethod("setLineSpace", Int::class.javaPrimitiveType).invoke(manager, 0)
+            add.invoke(manager, bitmapClass.getConstructor(Bitmap::class.java, Int::class.javaPrimitiveType).newInstance(fixedBitmap, 0))
+            return
+        }
         val constructor = textClass.getConstructor(String::class.java, Int::class.javaPrimitiveType, Float::class.javaPrimitiveType, Boolean::class.javaPrimitiveType)
         request.textLines().forEachIndexed { index, text ->
             add.invoke(manager, constructor.newInstance(text, if (index == 0) 1 else 0, 24f, index == 0))
@@ -63,13 +74,17 @@ class KozenPrinterPort(private val context: Context) : PrinterPort {
     }
 
     override fun feed(dots: Int) {
+        if (fixedLabelJob) {
+            checkedForwardFeed(checkNotNull(manager) { "打印连接已关闭" }, dots)
+            return
+        }
         managerClass.getMethod("setLineWrapPixels", Int::class.javaPrimitiveType).invoke(manager, 1)
         managerClass.getMethod("lineWrapPixels", Int::class.javaPrimitiveType).invoke(manager, dots)
     }
 
     override fun close() {
         try { manager?.let { managerClass.getMethod("close").invoke(it) } }
-        finally { manager = null; listenerProxy = null }
+        finally { manager = null; listenerProxy = null; fixedLabelJob = false }
     }
 }
 

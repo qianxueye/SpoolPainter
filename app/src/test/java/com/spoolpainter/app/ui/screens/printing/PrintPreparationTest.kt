@@ -3,6 +3,8 @@ package com.spoolpainter.app.ui.screens.printing
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import com.spoolpainter.app.hardware.printer.LabelQrMode
+import com.spoolpainter.app.hardware.printer.PaperTemplate
+import com.spoolpainter.app.hardware.printer.LabelField
 import com.spoolpainter.app.hardware.printer.PaperTail
 import com.spoolpainter.app.hardware.printer.PrintRequest
 import com.spoolpainter.app.hardware.printer.SpoolLabel
@@ -98,4 +100,30 @@ class PrintPreparationTest {
         runCurrent()
         assertEquals(0, dispatches)
     }
+    @Test fun capturesTemplateBeforeFetchAndPreservesItWhenProfilesAreEdited() = runTest {
+        val selectedFields = mutableSetOf(LabelField.ID, LabelField.NAME, LabelField.QR)
+        val original = PaperTemplate(name = "原模板", heightMm = 80.0, gapMm = 2.0, offsetYmm = 1.0, selectedFields = selectedFields)
+        val requestSnapshot = request.copy(qrMode = LabelQrMode.WEB, paper = original).capturePaperOptions()
+        val fetched = CompletableDeferred<JsonObject>()
+        val submitted = mutableListOf<PrintRequest>()
+        var disk: String? = null
+        val profiles = PaperTemplateStore({ disk }, { disk = it; true }, { "one" })
+        profiles.save(null, original)
+        val worker = PrintPreparation(backgroundScope, { request.serverUrl }, { fetched.await() }, { true }, { value, _ -> submitted += value; true })
+        worker.start(requestSnapshot, PaperTail.ONE_AND_HALF_CM)
+        runCurrent()
+        selectedFields.clear()
+        profiles.save("one", original.copy(name = "新版", heightMm = 120.0, selectedFields = setOf(LabelField.LOCATION)))
+        fetched.complete(fixture())
+        runCurrent()
+        val captured = submitted.single().paper!!
+        assertEquals("原模板", captured.name)
+        assertEquals(80.0, captured.heightMm, 0.0)
+        assertEquals(2.0, captured.gapMm, 0.0)
+        assertEquals(1.0, captured.offsetYmm, 0.0)
+        assertEquals(setOf(LabelField.ID, LabelField.NAME, LabelField.QR), captured.selectedFields)
+        assertEquals("PETG Pro", submitted.single().label.name)
+        assertEquals(LabelQrMode.WEB, submitted.single().qrMode)
+    }
+
 }
